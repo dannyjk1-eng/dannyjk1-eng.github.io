@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flange Identifier</title>
+<!-- Web-app (PWA) bits: lets a hosted copy be installed with "Add to Home screen". -->
+<meta name="theme-color" content="#0b5cad">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Flange ID">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<!--
+  Flange Identifier — index.html
+  ---------------------------------------------------------------
+  This file is the screen: layout (HTML), looks (CSS) and the code that
+  reads the inputs and draws the results (JavaScript at the bottom).
+  The flange numbers live in flange-data.js and the matching maths in
+  flange-logic.js, loaded just below.
+-->
+<style>
+  /* ---------- colours and basic page style ---------- */
+  :root {
+    --bg: #f3f5f8; --card: #fff; --ink: #1d2733; --muted: #5d6b7a; --line: #dde3ea;
+    --brand: #0b5cad; --good: #1a8a4a; --close: #c98a00; --bad: #c0392b; --flag: #a05a00;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }   /* "hidden" must win over display:grid etc. */
+  body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: var(--brand); color: #fff; padding: 14px 16px; }
+  header h1 { margin: 0; font-size: 1.3rem; }
+  header p { margin: 2px 0 0; opacity: .85; font-size: .9rem; }
+  main { max-width: 1100px; margin: 0 auto; padding: 12px; display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { main { grid-template-columns: 380px 1fr; align-items: start; } #inputs { position: sticky; top: 12px; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  h2 { font-size: 1.05rem; margin: 0 0 10px; }
+
+  /* ---------- the input form ---------- */
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-weight: 600; font-size: .9rem; }
+  .field .hint { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+  .field input, .field select { width: 100%; padding: 9px 10px; font-size: 1rem; border: 1px solid #b9c3cf; border-radius: 7px; background: #fff; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .derived { font-size: .82rem; color: var(--brand); margin-top: 3px; min-height: 1em; }
+  .seg { display: flex; border: 1px solid #b9c3cf; border-radius: 7px; overflow: hidden; }
+  .seg button { flex: 1; padding: 8px; border: 0; background: #fff; font-size: .9rem; cursor: pointer; }
+  .seg button.on { background: var(--brand); color: #fff; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .9rem; }
+  .field label.inline, .checks label { display: inline-flex; align-items: center; gap: 5px; font-weight: 400; }
+  .field input[type=checkbox] { width: auto; margin: 0; }
+  main > * { min-width: 0; }   /* stops long text pushing the page wider than a phone screen */
+  .btns { display: flex; gap: 8px; margin-top: 6px; }
+  .btns button { flex: 1; padding: 10px; border-radius: 7px; border: 1px solid var(--brand); background: #fff; color: var(--brand); font-size: .95rem; cursor: pointer; }
+  details.more summary { cursor: pointer; color: var(--brand); font-size: .9rem; margin: 6px 0; }
+
+  /* ---------- result cards ---------- */
+  .result { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #fff; }
+  .result.top { border: 2px solid var(--good); }
+  .rhead { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .rtitle { font-weight: 700; font-size: 1.05rem; }
+  .rsub { color: var(--muted); font-size: .85rem; }
+  .score { font-weight: 700; white-space: nowrap; }
+  .bar { height: 6px; background: #e8edf2; border-radius: 3px; margin: 6px 0 8px; overflow: hidden; }
+  .bar span { display: block; height: 100%; }
+  ul.why { list-style: none; padding: 0; margin: 6px 0; font-size: .86rem; }
+  ul.why li { padding: 2px 0 2px 22px; position: relative; }
+  ul.why li::before { position: absolute; left: 2px; font-weight: 700; }
+  li.good::before { content: "✓"; color: var(--good); }
+  li.close::before { content: "~"; color: var(--close); }
+  li.bad::before { content: "✗"; color: var(--bad); }
+  li.na::before { content: "–"; color: var(--muted); }
+  table.spec { width: 100%; border-collapse: collapse; font-size: .88rem; margin-top: 6px; }
+  table.spec th { text-align: left; font-weight: 600; color: var(--muted); width: 42%; padding: 4px 6px 4px 0; vertical-align: top; }
+  table.spec td { padding: 4px 0; border-bottom: 1px solid #f0f2f5; }
+  .note { font-size: .82rem; color: var(--muted); margin: 4px 0; }
+  .twin { background: #eef6ff; border-left: 4px solid var(--brand); padding: 8px 10px; font-size: .86rem; margin: 8px 0; border-radius: 4px; }
+  .flag { background: #fff6e8; border-left: 4px solid var(--flag); padding: 6px 10px; font-size: .82rem; margin: 6px 0; border-radius: 4px; }
+  .pill { display: inline-block; font-size: .75rem; padding: 1px 7px; border-radius: 10px; background: #e8edf2; margin-right: 4px; }
+  .empty { color: var(--muted); text-align: center; padding: 30px 10px; }
+
+  /* ---------- browse tables ---------- */
+  .scroll { overflow-x: auto; }
+  table.data { border-collapse: collapse; font-size: .8rem; width: 100%; }
+  table.data th, table.data td { border: 1px solid var(--line); padding: 3px 6px; text-align: right; white-space: nowrap; }
+  table.data th { background: #f0f3f7; }
+  /* ---------- the drawing ---------- */
+  #drawing svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+  .drawbtns { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .drawbtn { font-size: .8rem; padding: 5px 9px; border-radius: 14px; border: 1px solid var(--brand); background: #fff; color: var(--brand); cursor: pointer; }
+  .drawbtn.on { background: var(--brand); color: #fff; }
+  /* ---------- mode tabs (Identify / Browse standards) ---------- */
+  .modes { max-width: 1100px; margin: 12px auto 0; padding: 0 12px; }
+  .modes .seg { background: #fff; }
+  .modes .seg button { padding: 10px; font-weight: 600; font-size: .95rem; }
+
+  /* ---------- browse mode ---------- */
+  .stepper { display: grid; grid-template-columns: 48px 1fr 48px; gap: 6px; }
+  .stepper button { font-size: 1.2rem; border: 1px solid var(--brand); background: #fff; color: var(--brand); border-radius: 7px; cursor: pointer; }
+  .stepper button:disabled { opacity: .35; cursor: default; }
+  #bRange { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+  table.range { font-size: .78rem; }
+  table.range th { position: sticky; top: 0; z-index: 1; }
+  table.range td small { display: block; color: var(--muted); font-size: .68rem; }
+  table.range tbody tr { cursor: pointer; }
+  table.range tbody tr:hover { background: #f5f8fc; }
+  @media (max-width: 480px) { table.range th, table.range td { padding: 3px 4px; } }
+  table.range tr.sel td { background: #dcebff; font-weight: 700; }
+  table.cmp { font-size: .82rem; }
+  table.cmp th:first-child { text-align: left; }
+  table.cmp td, table.cmp th { white-space: normal; }
+  table.cmp tr.diff td { background: #fff1d6; font-weight: 700; }
+  .vgood, .vbad { padding: 7px 10px; border-radius: 6px; font-size: .88rem; font-weight: 600; margin-bottom: 8px; }
+  .vgood { background: #e5f5ec; color: var(--good); }
+  .vbad { background: #fdecea; color: var(--bad); }
+  #bDrawing svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+  .flag .drawbtns, .twin .drawbtns { margin-bottom: 0; }
+  /* ---------- adapters mode ---------- */
+  .vfit { background: #fff3d6; color: #8a5a00; padding: 7px 10px; border-radius: 6px; font-size: .88rem; font-weight: 600; margin-bottom: 8px; }
+  .pickrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pickcard { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+  .pickcard.a { border-left: 5px solid #0b5cad; } .pickcard.b { border-left: 5px solid #d35400; }
+  .pickcard h3 { margin: 0 0 6px; font-size: .9rem; }
+  .pickcard.a h3 { color: #0b5cad; } .pickcard.b h3 { color: #d35400; }
+  .adgroup { margin-bottom: 6px; }
+  table.adcmp td, table.adcmp th { text-align: left; }
+  #adDrawing svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+  .adprod a { color: var(--brand); word-break: break-all; }
+  details.adguide { border-top: 1px solid var(--line); padding: 6px 0; }
+  details.adguide summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
+  @media (max-width: 480px) { .modes .seg button { padding: 10px 4px; font-size: .82rem; } }
+  footer { max-width: 1100px; margin: 0 auto; padding: 8px 14px 30px; font-size: .78rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Flange Identifier</h1>
+  <p>Enter what you can measure on site — get the likely standard, DN and PN.</p>
+</header>
+
+<!-- Two modes: identify a flange from site measurements, or browse the standards. -->
+<nav class="modes">
+  <div class="seg" id="modeSeg">
+    <button type="button" data-mode="identify" class="on">🔍 Identify</button>
+    <button type="button" data-mode="browse">📖 Browse standards</button>
+    <button type="button" data-mode="adapters">🔌 Adapters</button>
+  </div>
+</nav>
+
+<main id="identifyMain">
+  <!-- ================= INPUTS ================= -->
+  <section class="card" id="inputs">
+    <h2>Site measurements</h2>
+
+    <div class="field">
+      <label>Units you measured in</label>
+      <div class="seg" id="unitSeg">
+        <button type="button" data-unit="mm" class="on">mm</button>
+        <button type="button" data-unit="in">inches</button>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="od">Flange outside Ø</label>
+        <input id="od" type="number" inputmode="decimal" step="any" placeholder="e.g. 220">
+      </div>
+      <div class="field">
+        <label for="n">Number of bolts</label>
+        <input id="n" type="number" inputmode="numeric" step="1" min="3" placeholder="e.g. 8">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="chord">Distance between adjacent bolt centres</label>
+      <input id="chord" type="number" inputmode="decimal" step="any" placeholder="e.g. 68.9">
+      <div class="hint">Measure from the left edge of one hole to the left edge of the next hole — that equals centre-to-centre.</div>
+      <div class="derived" id="chordOut"></div>
+    </div>
+
+    <div class="field">
+      <label for="pcd">PCD (if you measured it directly)</label>
+      <input id="pcd" type="number" inputmode="decimal" step="any" placeholder="e.g. 180">
+      <div class="hint">With an even number of bolts: left edge of one hole to the left edge of the hole directly opposite.</div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="hole">Bolt hole Ø</label>
+        <input id="hole" type="number" inputmode="decimal" step="any" placeholder="e.g. 18">
+      </div>
+      <div class="field">
+        <label for="bolt">Bolt size</label>
+        <select id="bolt">
+          <option value="">– not known –</option>
+          <optgroup label="Metric">
+            <option>M10</option><option>M12</option><option>M16</option><option>M20</option><option>M22</option>
+            <option>M24</option><option>M27</option><option>M30</option><option>M33</option><option>M36</option>
+            <option>M39</option><option>M45</option><option>M52</option><option>M56</option>
+          </optgroup>
+          <optgroup label="Imperial">
+            <option>1/2"</option><option>5/8"</option><option>3/4"</option><option>7/8"</option><option>1"</option>
+            <option>1 1/8"</option><option>1 1/4"</option><option>1 1/2"</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="thk">Flange thickness</label>
+      <input id="thk" type="number" inputmode="decimal" step="any" placeholder="e.g. 20">
+      <div class="hint">Weak clue only — varies with flange type, material, corrosion and paint.</div>
+    </div>
+
+    <details class="more">
+      <summary>More measurements (optional)</summary>
+      <div class="row2">
+        <div class="field">
+          <label for="rf">Raised face Ø</label>
+          <input id="rf" type="number" inputmode="decimal" step="any">
+        </div>
+        <div class="field">
+          <label for="pipe">Pipe outside Ø</label>
+          <input id="pipe" type="number" inputmode="decimal" step="any">
+          <div class="hint">Steel DN100 = 114.3, ductile DN100 = 118</div>
+        </div>
+      </div>
+    </details>
+
+    <div class="field">
+      <label>Measurement tolerance</label>
+      <div class="seg" id="tolSeg">
+        <button type="button" data-tol="0.6">Tight</button>
+        <button type="button" data-tol="1" class="on">Normal</button>
+        <button type="button" data-tol="1.6">Loose</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Standards to search</label>
+      <div class="checks" id="famChecks"></div>
+    </div>
+
+    <div class="field">
+      <label class="inline"><input type="checkbox" id="showInch"> Also show inch values for metric flanges</label>
+    </div>
+
+    <div class="btns">
+      <button type="button" id="exampleBtn">Example</button>
+      <button type="button" id="clearBtn">Clear</button>
+    </div>
+  </section>
+
+  <!-- ================= RESULTS ================= -->
+  <section>
+    <div class="card" id="drawingCard" hidden>
+      <h2>Drawing <span class="rsub" id="drawingWhich"></span></h2>
+      <div id="drawing"></div>
+      <div class="note">Tap “Draw” on any result below to draw that flange instead.</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h2>Likely flanges</h2>
+      <div id="results"><div class="empty">Start typing measurements — results update as you go.<br>OD + number of bolts + bolt spacing is usually enough.</div></div>
+    </div>
+
+    <p class="note" style="text-align:center">Want to look up a size instead? Use <b>📖 Browse standards</b> at the top.</p>
+  </section>
+</main>
+
+<!-- ================= BROWSE STANDARDS (flange-browse.js) ================= -->
+<main id="browseMain" hidden>
+  <section>
+    <div class="card">
+      <h2>Browse standards</h2>
+      <div class="drawbtns" id="bQuick"></div>
+      <div class="field">
+        <label for="bStd">Standard / rating</label>
+        <select id="bStd"></select>
+      </div>
+      <div class="field">
+        <label for="bSize">Size</label>
+        <div class="stepper">
+          <button type="button" id="bPrev" aria-label="Previous size">‹</button>
+          <select id="bSize"></select>
+          <button type="button" id="bNext" aria-label="Next size">›</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="inline"><input type="checkbox" id="bShowInch"> Also show inch values for metric flanges</label>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px" id="bDetails"></div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Drawing</h2>
+      <div id="bDrawing"></div>
+    </div>
+    <div class="card" style="margin-top:12px" id="cCard">
+      <h2>Compare with</h2>
+      <div class="row2">
+        <div class="field"><select id="cStd" aria-label="Compare with standard"></select></div>
+        <div class="field"><select id="cSize" aria-label="Compare with size" hidden></select></div>
+      </div>
+      <div id="cOut"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2 id="bRangeTitle">All sizes</h2>
+      <div class="note">Tap a row to select it. Chord = adjacent bolt centres. Thk = thickest listed type. ⚠ = not cross-checked.</div>
+      <div id="bRange"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= ADAPTERS (flange-adapters.js) ================= -->
+<main id="adaptersMain" hidden>
+  <section>
+    <div class="card">
+      <h2>Flange adapters &amp; compatibility</h2>
+      <div class="note" style="margin-top:0">Pick two flanges. The app says whether they bolt together and, if not, which conversion products bridge them.</div>
+      <div class="pickcard a">
+        <h3>Flange A</h3>
+        <div class="field"><select id="adStdA" aria-label="Flange A standard"></select></div>
+        <div class="field" style="margin-bottom:0"><select id="adSizeA" aria-label="Flange A size"></select></div>
+      </div>
+      <div class="btns" style="margin:0 0 8px"><button type="button" id="adSwap">⇅ Swap A and B</button></div>
+      <div class="pickcard b">
+        <h3>Flange B</h3>
+        <div class="field"><select id="adStdB" aria-label="Flange B standard"></select></div>
+        <div class="field" style="margin-bottom:0"><select id="adSizeB" aria-label="Flange B size"></select></div>
+      </div>
+      <h2 style="margin-top:12px">Quick presets</h2>
+      <div id="adPresets"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Verdict</h2>
+      <div id="adVerdict"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Side by side</h2>
+      <div id="adTable"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Bolt circles overlaid</h2>
+      <div id="adDrawing"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Conversion products</h2>
+      <div class="note" style="margin-top:0">Real products found on the makers' own pages and datasheets (checked 26 Nov 2026). ⚠ = not certain. Always confirm the size and drilling with the maker before ordering.</div>
+      <div id="adProducts"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>General options</h2>
+      <div id="adGuide"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  For guidance only. Values are from the standards listed in each table's sources (see README.md); rows marked ⚠ could not be
+  cross-checked against a second source. Always confirm against the current standard, the manufacturer's drawing or the asset
+  record before ordering parts or working on pressurised plant.
+  <p><a href="../pipes/">Pipe Reference →</a> (sister app: pipe ODs, walls, materials and couplings) · <a href="../">← All Technician Tools</a></p>
+</footer>
+
+<script src="flange-data.js"></script>
+<script src="flange-logic.js"></script>
+<script src="flange-drawing.js"></script>
+<script src="flange-browse.js"></script>
+<script src="flange-adapters-data.js"></script>
+<script src="flange-adapters.js"></script>
+<script>
+/* =====================================================================
+ * SCREEN CODE: read the inputs, call identify(), draw the results.
+ * ===================================================================== */
+
+const ALL_FLANGES = expandTables(FLANGE_TABLES);           // every flange, in mm
+const FAMILIES = [...new Set(FLANGE_TABLES.map((t) => t.family))];
+let inputUnit = 'mm';     // 'mm' or 'in' — what the user typed in
+let tolFactor = 1;
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------- formatting helpers ---------- */
+// Length in mm -> text, with inches added when useful.
+function fmt(mm, flange, dp = 1) {
+  if (mm === null || mm === undefined) return '—';
+  const showInch = flange.unit === 'in' || $('showInch').checked;
+  let s = `${round(mm, dp)} mm`;
+  if (showInch) s += ` <span class="rsub">(${inchFraction(mm / MM_PER_INCH)})</span>`;
+  return s;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+/* ---------- read the form ---------- */
+function readNumber(id) {
+  const v = parseFloat($(id).value);
+  if (isNaN(v) || v <= 0) return undefined;
+  return inputUnit === 'in' ? v * MM_PER_INCH : v;   // always work in mm inside
+}
+function readMeasurements() {
+  const nVal = parseInt($('n').value, 10);
+  return {
+    od: readNumber('od'),
+    n: nVal > 0 ? nVal : undefined,
+    chord: readNumber('chord'),
+    pcd: readNumber('pcd'),
+    hole: readNumber('hole'),
+    boltDia: $('bolt').value ? boltDiameterMm($('bolt').value) : undefined,
+    thickness: readNumber('thk'),
+    rf: readNumber('rf'),
+    pipeOD: readNumber('pipe'),
+  };
+}
+
+/* ---------- draw one result card ---------- */
+function scoreColour(s) { return s >= 85 ? 'var(--good)' : s >= 65 ? 'var(--close)' : 'var(--bad)'; }
+function confidence(s, fields) {
+  if (fields < 6) return 'too few measurements to be sure';
+  return s >= 90 ? 'strong match' : s >= 75 ? 'good match' : s >= 60 ? 'possible' : 'weak';
+}
+
+function renderGroup(g, rank, m) {
+  const r = g.best, f = r.flange;
+  const titles = g.items.map((i) => esc(i.flange.label)).join('<br>');
+  const bl = boltLength(f, m.thickness);
+  const gk = gasketInfo(f);
+  const chordStd = chordFromPcd(f.pcd, f.n);
+
+  // Which flanges in this group (for the thickness row we list each one).
+  const thicknessRows = g.items.map((i) => {
+    const t = i.flange.thickness.map((x) => `${fmt(x.mm, i.flange)} – ${esc(x.label)}`).join('<br>') || '—';
+    return g.items.length > 1 ? `<b>${esc(i.flange.rating)} ${esc(i.flange.family)}:</b><br>${t}` : t;
+  }).join('<br>');
+
+  const flags = [...new Set(g.items.flatMap((i) => i.flange.flags.map((fl) => `${i.flange.family} ${i.flange.rating}: ${fl}`)))];
+  const notes = [...new Set(g.items.flatMap((i) => i.flange.notes))];
+  const aliases = [...new Set(g.items.flatMap((i) => i.flange.aliases))];
+
+  return `
+  <div class="result ${rank === 0 ? 'top' : ''}">
+    <div class="rhead">
+      <div><div class="rtitle">${rank + 1}. ${titles}</div>
+        <div class="rsub">${esc(f.material)}${aliases.length ? ' · also called ' + esc(aliases.slice(0, 3).join(', ')) : ''}</div></div>
+      <div class="score" style="color:${scoreColour(r.score)}">${r.score}%</div>
+    </div>
+    <div class="bar"><span style="width:${r.score}%;background:${scoreColour(r.score)}"></span></div>
+    <div class="rsub">${confidence(r.score, r.fieldsCompared)}</div>
+    <div class="drawbtns">${g.items.map((i) => `<button type="button" class="drawbtn${i.flange.id === selectedId ? ' on' : ''}"
+       data-id="${esc(i.flange.id)}">✎ Draw ${g.items.length > 1 ? esc(i.flange.family + ' ' + i.flange.rating) : 'this flange'}</button>`).join('')}</div>
+    <div class="drawbtns"><button type="button" class="drawbtn" data-adapt="${esc(f.id)}">⇄ Compare with… / adapters</button></div>
+    ${g.twinNote ? `<div class="twin">${esc(g.twinNote)}</div>` : ''}
+    <ul class="why">${r.checks.map((c) => `<li class="${c.status}">${esc(c.text)}</li>`).join('')}</ul>
+    <details ${rank === 0 ? 'open' : ''}>
+      <summary>Full standard details</summary>
+      <table class="spec">
+        <tr><th>Nominal size</th><td>DN${f.dn}${f.nps ? ` / ${esc(f.nps)}"` : ''}</td></tr>
+        <tr><th>Outside diameter (D)</th><td>${fmt(f.od, f)}${f.odAlt.length ? ` or ${fmt(f.odAlt[0], f)} (ductile iron)` : ''}</td></tr>
+        <tr><th>PCD (K)</th><td>${fmt(f.pcd, f)}</td></tr>
+        <tr><th>Bolts</th><td>${f.n} × ${esc(f.bolt)}${f.nAlt.length ? ` (or ${f.nAlt.join('/')} holes)` : ''}</td></tr>
+        <tr><th>Bolt hole (L)</th><td>${fmt(f.hole, f)}</td></tr>
+        <tr><th>Adjacent bolt centres</th><td>${fmt(chordStd, f)}</td></tr>
+        <tr><th>Flange thickness</th><td>${thicknessRows}</td></tr>
+        <tr><th>Raised face Ø (d1)</th><td>${fmt(f.rf, f, 0)}</td></tr>
+        <tr><th>Pipe OD</th><td>${fmt(f.pipeOD, f)}</td></tr>
+        <tr><th>Suggested bolts</th><td>${bl ? `${f.n} × ${esc(f.bolt)} × ${bl.bolt} mm hex bolts, or studs ${bl.stud} mm long
+             <div class="note">Rough guide: 2 × ${bl.thicknessUsed} mm flange + 3 mm gasket + washers + nut + 2–3 threads. Check against the actual valve/fitting.</div>` : '—'}</td></tr>
+        <tr><th>Gasket</th><td>${esc(gk.text)}</td></tr>
+      </table>
+      ${notes.map((n) => `<div class="note">• ${esc(n)}</div>`).join('')}
+      ${flags.map((fl) => `<div class="flag">⚠ ${esc(fl)}</div>`).join('')}
+      <div class="note">Source: ${esc(f.sources.join('; '))}</div>
+    </details>
+  </div>`;
+}
+
+/* ---------- the drawing ----------
+ * selectedId = the flange the user tapped "Draw" on. If it is no longer in
+ * the results (measurements changed), we fall back to the top match.
+ */
+let selectedId = null;
+let lastResults = [];      // every scored flange from the last update, for lookup by id
+let lastMeasurements = {};
+
+function showDrawing() {
+  const card = $('drawingCard');
+  if (!lastResults.length) { card.hidden = true; return; }
+  const pick = lastResults.find((r) => r.flange.id === selectedId) || lastResults[0];
+  selectedId = pick.flange.id;
+  const f = pick.flange;
+  card.hidden = false;      // show the card first, so its width can be measured
+  $('drawing').innerHTML = drawFlange(f, {
+    checks: pick.checks,                               // site values + colours
+    showInch: $('showInch').checked,
+    bolt: boltLength(f, lastMeasurements.thickness),   // estimated bolt length
+    compact: $('drawing').clientWidth < 520,           // phone: bigger text
+  });
+  $('drawingWhich').textContent = pick === lastResults[0] ? '— top match' : '— selected';
+  card.hidden = false;
+  document.querySelectorAll('.drawbtn').forEach((b) => b.classList.toggle('on', b.dataset.id === selectedId));
+}
+
+/* ---------- main update: runs on every keystroke ---------- */
+function update() {
+  const m = readMeasurements();
+
+  // Show the PCD worked out from the chord, if we have a bolt count.
+  if (m.chord && m.n) {
+    const pcd = pcdFromChord(m.chord, m.n);
+    $('chordOut').innerHTML = `PCD = chord ÷ sin(180°/${m.n}) = <b>${round(pcd)} mm</b> (${inchFraction(pcd / MM_PER_INCH)})`;
+  } else if (m.chord) {
+    $('chordOut').textContent = 'Enter the number of bolts to work out the PCD (the matcher will still try every bolt count).';
+  } else {
+    $('chordOut').textContent = '';
+  }
+
+  const families = [...document.querySelectorAll('#famChecks input:checked')].map((c) => c.value);
+  const groups = identify(ALL_FLANGES, m, { tolFactor, families });
+  const out = $('results');
+  if (!Object.values(m).some((v) => v !== undefined)) {
+    out.innerHTML = '<div class="empty">Start typing measurements — results update as you go.<br>OD + number of bolts + bolt spacing is usually enough.</div>';
+  } else if (!groups.length) {
+    out.innerHTML = '<div class="empty">No good match. Check the measurements and units, try “Loose” tolerance, or tick more standards.</div>';
+  } else {
+    out.innerHTML = groups.map((g, i) => renderGroup(g, i, m)).join('');
+  }
+  lastResults = groups.flatMap((g) => g.items);
+  lastMeasurements = m;
+  showDrawing();
+}
+
+/* ---------- Identify / Browse mode switch ---------- */
+const MODE_KEY = 'flangeIdentifier.mode';
+let mode = 'identify';
+function setMode(m) {
+  mode = m === 'browse' || m === 'adapters' ? m : 'identify';
+  $('identifyMain').hidden = mode !== 'identify';
+  $('browseMain').hidden = mode !== 'browse';
+  $('adaptersMain').hidden = mode !== 'adapters';
+  document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+  try { localStorage.setItem(MODE_KEY, mode); } catch (e) { /* ignore */ }
+  // Redraw now the section is visible (drawings size themselves to their box).
+  if (mode === 'browse') initBrowse.render(); else if (mode === 'adapters') initAdapters.render(); else showDrawing();
+}
+
+/* ---------- wire everything up ---------- */
+function init() {
+  // Standard family tick boxes
+  $('famChecks').innerHTML = FAMILIES.map((fam) =>
+    `<label><input type="checkbox" value="${esc(fam)}" checked> ${esc(fam)}</label>`).join('');
+
+  // Browse standards mode (flange-browse.js)
+  initBrowse(ALL_FLANGES, FLANGE_TABLES);
+
+  // Adapters mode (flange-adapters.js)
+  initAdapters(ALL_FLANGES, FLANGE_TABLES);
+
+  // Re-run the match whenever anything changes
+  // New measurements = new results, so go back to drawing the top match.
+  const onEdit = () => { selectedId = null; update(); };
+  document.querySelectorAll('#inputs input, #inputs select').forEach((el) => {
+    if (el.id === 'showInch') return;          // handled below; keeps the selected drawing
+    el.addEventListener('input', onEdit);
+    el.addEventListener('change', onEdit);
+  });
+
+  // mm / inch switch
+  document.querySelectorAll('#unitSeg button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('#unitSeg button').forEach((x) => x.classList.toggle('on', x === b));
+    inputUnit = b.dataset.unit;
+    update();
+  }));
+
+  // tolerance switch
+  document.querySelectorAll('#tolSeg button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('#tolSeg button').forEach((x) => x.classList.toggle('on', x === b));
+    tolFactor = parseFloat(b.dataset.tol);
+    update();
+  }));
+
+  $('showInch').addEventListener('change', update);
+
+  // Redraw when the screen size changes (e.g. phone turned sideways).
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => (mode === 'browse' ? initBrowse.render() : showDrawing()), 150);
+  });
+
+  // "Draw" buttons are re-created on every update, so listen on the results box instead.
+  // "Compare with… / adapters" on a result: open the Adapters tab with that flange as A.
+  $('results').addEventListener('click', (e) => {
+    const ab = e.target.closest('[data-adapt]');
+    if (!ab) return;
+    initAdapters.open(ab.dataset.adapt);
+    setMode('adapters');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  $('results').addEventListener('click', (e) => {
+    const btn = e.target.closest('.drawbtn[data-id]');
+    if (!btn) return;
+    selectedId = btn.dataset.id;
+    showDrawing();
+    $('drawingCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  $('clearBtn').addEventListener('click', () => {
+    ['od', 'n', 'chord', 'pcd', 'hole', 'thk', 'rf', 'pipe'].forEach((id) => { $(id).value = ''; });
+    $('bolt').value = '';
+    update();
+  });
+
+  // Example: a DN100 PN16 measured with a tape — OD, bolt count, chord and bolt size.
+  $('exampleBtn').addEventListener('click', () => {
+    document.querySelector('#unitSeg button[data-unit="mm"]').click();
+    $('od').value = 221; $('n').value = 8; $('chord').value = 69; $('pcd').value = '';
+    $('hole').value = 18; $('bolt').value = 'M16'; $('thk').value = 20;
+    update();
+  });
+
+  // Mode tabs. The last mode used is remembered in localStorage.
+  document.querySelectorAll('#modeSeg button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  let startMode = 'identify';
+  try { startMode = localStorage.getItem(MODE_KEY) || 'identify'; } catch (e) { /* ignore */ }
+  // Links: index.html#browse opens Browse; #browse=EN1092-1_PN16_100 also picks that flange.
+  if (location.hash.startsWith('#browse')) {
+    startMode = 'browse';
+    const id = location.hash.split('=')[1];
+    if (id) initBrowse.select(decodeURIComponent(id));
+  }
+  // #adapters opens the Adapters tab; #adapters=BS10_D_6,EN1092-1_PN16_150 also picks the pair.
+  if (location.hash.startsWith('#adapters')) {
+    startMode = 'adapters';
+    const ids = (location.hash.split('=')[1] || '').split(',').map(decodeURIComponent);
+    if (ids.length === 2) initAdapters.set(ids[0], ids[1]);
+  }
+  if (location.hash === '#example') startMode = 'identify';
+  setMode(startMode);
+
+  update();
+  // Opening the page as index.html#example fills in the example straight away.
+  if (location.hash === '#example') $('exampleBtn').click();
+}
+init();
+
+// Offline support when the app is hosted on a website (see sw.js).
+// Skipped when opened as a file or inside the Android app, which are offline anyway.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => { /* not critical */ });
+  // Migration: Flange ID used to live at the site root. If this browser still has the old
+  // root worker, ask it to check for updates now, so it swaps itself for the clean-up worker
+  // (../sw.js) right away instead of waiting for the browser's own once-a-day check.
+  navigator.serviceWorker.getRegistration('../').then((r) => {
+    if (r && r.scope === new URL('../', location.href).href) r.update().catch(() => {});
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>
