@@ -1,36 +1,35 @@
-/* sw.js — the "service worker" that makes the hosted web app work offline.
- * The first time the page is opened online, the browser saves every file
- * below. After that it answers from that saved copy, so no signal is needed.
- * CHANGED A FILE? Bump the version number so phones fetch the new copy.
+/* sw.js — CLEAN-UP WORKER for the site root. It does no caching at all.
+ * ---------------------------------------------------------------
+ * Flange ID used to live at the site root, so phones that visited it
+ * have an old service worker registered here (scope "/") and an old
+ * saved copy of the page in a cache called flange-id-v1 or flange-id-v2.
+ * Flange ID now lives in /flange/ and the root is the Technician Tools
+ * hub, so that old worker must go. When a phone fetches this file:
+ *   install   -> take over straight away (skipWaiting)
+ *   activate  -> delete the old root caches, unregister this worker,
+ *                and reload any open page so it shows the hub, not the
+ *                stale saved copy.
+ * It only deletes flange-id-v1 and flange-id-v2: the new /flange/ app
+ * keeps its saved copy in flange-id-v3, and /pipes/ uses pipe-ref-*.
+ * The hub page does not register a service worker; this file is only
+ * ever run by phones that already had the old one.
  */
-const CACHE = 'flange-id-v2';
-const FILES = [
-  './', './index.html', './manifest.json',
-  './flange-data.js', './flange-logic.js', './flange-drawing.js', './flange-browse.js',
-  './icons/icon-192.png', './icons/icon-512.png',
-  './icons/icon-maskable-192.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png',
-];
-// Full URLs of our own files. Anything else (e.g. the Pipe Reference app in
-// pipes/, which has its own service worker) is left alone.
-const OWN = new Set(FILES.map((f) => new URL(f, self.registration.scope).href));
+const OLD_ROOT_CACHES = ['flange-id-v1', 'flange-id-v2'];
 
-// Install: download and save all the files.
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+self.addEventListener('install', () => {
+  self.skipWaiting();
 });
 
-// Activate: delete saved copies from older versions of THIS app only.
-self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((k) => k.startsWith('flange-id-') && k !== CACHE).map((k) => caches.delete(k))))
-    .then(() => self.clients.claim()));
-});
-
-// Our own files: use the saved copy if we have it, otherwise the network.
-self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
-  const u = new URL(e.request.url);
-  if (!OWN.has(u.origin + u.pathname)) return;
-  e.respondWith(caches.open(CACHE).then((c) => c.match(e.request, { ignoreSearch: true }))
-    .then((hit) => hit || fetch(e.request)));
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    await Promise.all(OLD_ROOT_CACHES.map((k) => caches.delete(k)));
+    await self.registration.unregister();
+    const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // Reload only pages at the site root (the old app); leave /flange/ and /pipes/ alone.
+    const root = new URL(self.registration.scope).pathname;
+    for (const c of open) {
+      if (new URL(c.url).pathname.startsWith(root + 'flange/') || new URL(c.url).pathname.startsWith(root + 'pipes/')) continue;
+      c.navigate(c.url).catch(() => { /* page already closed */ });
+    }
+  })());
 });

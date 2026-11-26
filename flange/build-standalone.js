@@ -5,7 +5,7 @@
  */
 const fs = require('fs');
 let html = fs.readFileSync('index.html', 'utf8');
-for (const file of ['flange-data.js', 'flange-logic.js', 'flange-drawing.js', 'flange-browse.js']) {
+for (const file of ['flange-data.js', 'flange-logic.js', 'flange-drawing.js', 'flange-browse.js', 'flange-adapters-data.js', 'flange-adapters.js']) {
   const code = fs.readFileSync(file, 'utf8');
   html = html.replace(`<script src="${file}"></script>`, () => `<script>\n${code}\n</script>`);
 }

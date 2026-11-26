@@ -377,4 +377,106 @@ function drawFlange(f, options = {}) {
     `<rect width="100%" height="100%" fill="#fff"/>` + out.join('') + `</svg>`;
 }
 
-if (typeof module !== 'undefined') module.exports = { drawFlange, fdHoleAngles, fdRaisedFaceHeight };
+/* =====================================================================
+ * drawOverlay(a, b, options)  —  TWO FLANGES' BOLT CIRCLES ON TOP OF EACH OTHER
+ * ---------------------------------------------------------------------
+ * Used by the "Adapters" tab. Flange A is drawn in blue, flange B in
+ * orange, both centred and to the same scale, so a mismatch in PCD or
+ * bolt count is visible at a glance. Holes are semi-transparent: where a
+ * blue and an orange hole overlap you can see how much room a bolt has.
+ * When both flanges have the same number of bolts, a zoomed inset shows
+ * ONE hole pair with the largest bolt that passes through both.
+ *   a, b      flange objects from expandTables() (all lengths in mm)
+ *   options   { compact: true on a phone (bigger text),
+ *               fit: result of compareDrilling() (draws the bolt in the inset) }
+ * Returns an SVG string.
+ * ===================================================================== */
+const FD_A = '#0b5cad', FD_B = '#d35400', FD_BOLT = '#1a8a4a';
+
+function drawOverlay(a, b, options = {}) {
+  const C = FD.colours;
+  FD.font = options.compact ? 25 : 19;
+  FD.R = options.compact ? 160 : 185;
+  const F = FD.font, LH = F + 4, small = F - 3, tiny = F - 5;
+  const { cx, R } = FD;
+  const out = [];
+  const s = R / (Math.max(a.od, b.od) / 2);              // one scale for both flanges
+
+  // Legend (the two flange names, in their colours)
+  const nameOf = (f) => `${f.family} ${f.rating} ${f.nps ? `${f.nps}"` : `DN${f.dn}`}`;
+  const lg = (tag, f, colour) => ({ text: `${tag}  ${nameOf(f)}`, colour, bold: true, size: Math.min(F + 2, Math.floor(1000 / (nameOf(f).length + 4))) });
+  out.push(fdText(cx, F + 12, [lg('● A', a, FD_A), lg('● B', b, FD_B)]));
+
+  const topOfFace = F + 12 + 2 * LH + 14;
+  const cy = topOfFace + R;
+  const odRa = (a.od / 2) * s, odRb = (b.od / 2) * s;
+  const pcdRa = (a.pcd / 2) * s, pcdRb = (b.pcd / 2) * s;
+  const holeRa = Math.max(2.5, (a.hole / 2) * s), holeRb = Math.max(2.5, (b.hole / 2) * s);
+
+  // Bodies: A solid light blue, B as an orange dashed outline
+  out.push(`<circle cx="${cx}" cy="${cy}" r="${fdRound(odRa, 2)}" fill="#e3edf8" stroke="${FD_A}" stroke-width="2"/>`);
+  out.push(`<circle cx="${cx}" cy="${cy}" r="${fdRound(odRb, 2)}" fill="none" stroke="${FD_B}" stroke-width="2" stroke-dasharray="9 5"/>`);
+  out.push(fdLine(cx - R - 12, cy, cx + R + 12, cy, C.muted, 'stroke-dasharray="14 4 3 4"'));
+  out.push(fdLine(cx, cy - R - 8, cx, cy + R + 12, C.muted, 'stroke-dasharray="14 4 3 4"'));
+  // Bolt circles
+  out.push(`<circle cx="${cx}" cy="${cy}" r="${fdRound(pcdRa, 2)}" fill="none" stroke="${FD_A}" stroke-width="1.4" stroke-dasharray="7 5"/>`);
+  out.push(`<circle cx="${cx}" cy="${cy}" r="${fdRound(pcdRb, 2)}" fill="none" stroke="${FD_B}" stroke-width="1.4" stroke-dasharray="3 4"/>`);
+  // Holes (class names let the tests count them)
+  const holes = (f, pcdR, holeR, colour, cls) => fdHoleAngles(f.n).map((ang) =>
+    `<circle class="${cls}" cx="${fdRound(cx + pcdR * Math.sin(ang), 2)}" cy="${fdRound(cy - pcdR * Math.cos(ang), 2)}"` +
+    ` r="${fdRound(holeR, 2)}" fill="${colour}" fill-opacity="0.28" stroke="${colour}" stroke-width="1.6"/>`).join('');
+  out.push(holes(a, pcdRa, holeRa, FD_A, 'bolt-hole-a'));
+  out.push(holes(b, pcdRb, holeRb, FD_B, 'bolt-hole-b'));
+
+  // PCD labels: A on the vertical centre line at the top, B at the bottom (halo keeps them readable)
+  out.push(fdText(cx, cy - pcdRa + F * 0.35, [{ text: `PCD ${fdRound(a.pcd)}`, colour: FD_A, bold: true, size: small }]));
+  out.push(fdText(cx, cy + pcdRb + F * 0.15, [{ text: `PCD ${fdRound(b.pcd)}`, colour: FD_B, bold: true, size: small }]));
+
+  // Values under the face view
+  let y = cy + R + 30;
+  const vals = (tag, f, colour) => ({ text: `${tag}: OD ${fdRound(f.od)} · PCD ${fdRound(f.pcd)} · ${f.n} × Ø${fdRound(f.hole)} (${f.bolt})`, colour, size: small, bold: true });
+  out.push(fdText(cx, y, [vals('A', a, FD_A), vals('B', b, FD_B)]));
+  y += 2 * LH + 6;
+
+  // Zoomed inset: one hole pair (only when the bolt counts match, so the holes pair up)
+  if (a.n === b.n) {
+    const dRad = Math.abs(a.pcd - b.pcd) / 2;               // how far apart the hole centres are
+    const rA = a.hole / 2, rB = b.hole / 2;
+    const z = 66 / (Math.max(rA, rB) + dRad / 2);           // zoom factor
+    const mid = (a.pcd + b.pcd) / 4;                        // radial position midway between the two holes
+    const insetCy = y + 12 + Math.max(rA, rB) * z + dRad * z / 2 + 8;
+    const xa = cx + (a.pcd / 2 - mid) * z, xb = cx + (b.pcd / 2 - mid) * z;
+    out.push(fdText(cx, y, [{ text: `Zoom ×${fdRound(z / s, 0)}: one hole pair  (flange centre ← → outside edge)`, colour: C.muted, size: tiny }]));
+    out.push(`<circle cx="${fdRound(xa, 2)}" cy="${insetCy}" r="${fdRound(rA * z, 2)}" fill="${FD_A}" fill-opacity="0.22" stroke="${FD_A}" stroke-width="2"/>`);
+    out.push(`<circle cx="${fdRound(xb, 2)}" cy="${insetCy}" r="${fdRound(rB * z, 2)}" fill="${FD_B}" fill-opacity="0.22" stroke="${FD_B}" stroke-width="2"/>`);
+    const fit = options.fit;
+    if (fit && fit.maxBolt > 0) {
+      // largest bolt that passes through both holes, sitting in the overlap of the two circles
+      const left = Math.max(xa - rA * z, xb - rB * z), right = Math.min(xa + rA * z, xb + rB * z);
+      const boltD = fit.chosenBolt || fit.maxBolt;
+      const bx = (left + right) / 2;
+      out.push(`<circle class="bolt-pass" cx="${fdRound(bx, 2)}" cy="${insetCy}" r="${fdRound((boltD / 2) * z, 2)}" fill="${FD_BOLT}" fill-opacity="0.35" stroke="${FD_BOLT}" stroke-width="2"/>`);
+    }
+    y = insetCy + Math.max(rA, rB) * z + 22;
+    const capLines = [
+      { text: `A hole Ø${fdRound(a.hole)} · B hole Ø${fdRound(b.hole)} · centres ${fdRound(dRad, 1)} mm apart`, colour: C.muted, size: tiny },
+    ];
+    if (fit && fit.maxBolt > 0) {
+      capLines.push({ text: `Largest bolt through both holes: Ø${fdRound(fit.maxBolt, 1)} mm (green = ${fit.chosenLabel || 'that bolt'})`, colour: FD_BOLT, size: tiny, bold: true });
+    }
+    out.push(fdText(cx, y, capLines));
+    y += capLines.length * LH + 4;
+  } else {
+    out.push(fdText(cx, y, [
+      { text: `${a.n} bolts vs ${b.n} bolts: the holes cannot pair up`, colour: FD_B, size: small, bold: true },
+    ]));
+    y += LH + 4;
+  }
+  const height = Math.ceil(y + 14);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FD.width} ${height}" class="flange-drawing flange-overlay"` +
+    ` role="img" aria-label="Bolt circles of ${fdEsc(nameOf(a))} and ${fdEsc(nameOf(b))} overlaid"` +
+    ` font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"><rect width="100%" height="100%" fill="#fff"/>` +
+    out.join('') + `</svg>`;
+}
+
+if (typeof module !== 'undefined') module.exports = { drawFlange, drawOverlay, fdHoleAngles, fdRaisedFaceHeight };
