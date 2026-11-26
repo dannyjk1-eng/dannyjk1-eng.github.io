@@ -11,8 +11,9 @@
  *                stale saved copy.
  * It only deletes flange-id-v1 and flange-id-v2: the new /flange/ app
  * keeps its saved copy in flange-id-v3, and /pipes/ uses pipe-ref-*.
- * The hub page does not register a service worker; this file is only
- * ever run by phones that already had the old one.
+ * The installable hub lives in /tools/ and has its own worker. This file
+ * is only ever run by phones that still have the old root Flange ID worker.
+ * It must stay at /sw.js so those phones pick it up on their next update check.
  */
 const OLD_ROOT_CACHES = ['flange-id-v1', 'flange-id-v2'];
 
@@ -25,10 +26,11 @@ self.addEventListener('activate', (event) => {
     await Promise.all(OLD_ROOT_CACHES.map((k) => caches.delete(k)));
     await self.registration.unregister();
     const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    // Reload only pages at the site root (the old app); leave /flange/ and /pipes/ alone.
+    // Reload only pages at the site root (the old app); leave /flange/, /pipes/ and /tools/ alone.
     const root = new URL(self.registration.scope).pathname;
     for (const c of open) {
-      if (new URL(c.url).pathname.startsWith(root + 'flange/') || new URL(c.url).pathname.startsWith(root + 'pipes/')) continue;
+      const path = new URL(c.url).pathname;
+      if (path.startsWith(root + 'flange/') || path.startsWith(root + 'pipes/') || path.startsWith(root + 'tools/')) continue;
       c.navigate(c.url).catch(() => { /* page already closed */ });
     }
   })());

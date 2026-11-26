@@ -4,85 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Technician Tools</title>
-<!-- iPhone: lets "Add to Home Screen" open this page full-screen. -->
 <meta name="theme-color" content="#0b5cad">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Technician Tools">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="icon" href="hub-icon.png">
-<link rel="apple-touch-icon" sizes="180x180" href="hub-icon.png">
 <!--
-  Technician Tools — index.html  (the hub page)
-  ---------------------------------------------------------------
-  A plain page with one big card per app. It deliberately has NO
-  manifest.json and registers NO service worker, so the browser
-  cannot "install" this page and it can never take over the scope
-  of the apps underneath it:
-      /flange/   Flange ID        (its own manifest + service worker)
-      /pipes/    Pipe Reference   (its own manifest + service worker)
-  Install each app from its own page. To add a third app later, copy
-  a card below and point it at a new folder.
+  The installable Technician Tools app lives in /tools/, so its manifest
+  scope and service worker cannot take over /flange/ or /pipes/. This
+  page just sends you there. It has no manifest and registers no worker.
+  The root sw.js is only a clean-up worker for old Flange ID installs.
 -->
+<meta http-equiv="refresh" content="0; url=tools/">
+<link rel="canonical" href="/tools/">
+<link rel="icon" href="tools/icons/icon-192.png">
+<script>location.replace('/tools/' + location.search + location.hash);</script>
 <style>
-  :root { --bg: #f3f5f8; --card: #fff; --ink: #1d2733; --muted: #5d6b7a; --line: #dde3ea; --brand: #0b5cad; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); }
-  header { background: var(--brand); color: #fff; padding: 14px 16px; }
-  header h1 { margin: 0; font-size: 1.3rem; }
-  header p { margin: 2px 0 0; opacity: .85; font-size: .9rem; }
-  main { max-width: 720px; margin: 0 auto; padding: 12px; display: grid; gap: 12px; }
-  a.tool { display: grid; grid-template-columns: 76px 1fr; gap: 14px; align-items: center; background: var(--card); border: 1px solid var(--line);
-    border-radius: 12px; padding: 16px; color: inherit; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
-  a.tool:active, a.tool:hover { border-color: var(--brand); }
-  a.tool img { width: 76px; height: 76px; border-radius: 16px; display: block; }
-  a.tool h2 { margin: 0 0 3px; font-size: 1.25rem; color: var(--brand); }
-  a.tool p { margin: 0; font-size: .9rem; color: var(--muted); }
-  a.tool .go { display: inline-block; margin-top: 8px; font-weight: 600; font-size: .9rem; color: var(--brand); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: .88rem; color: var(--muted); }
-  .card h3 { margin: 0 0 6px; font-size: .95rem; color: var(--ink); }
-  .card ol { margin: 6px 0 0; padding-left: 20px; }
-  footer { max-width: 720px; margin: 0 auto; padding: 8px 14px 30px; font-size: .78rem; color: var(--muted); }
+  body { margin: 24px; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #f3f5f8; color: #1d2733; }
+  a { color: #0b5cad; }
 </style>
 </head>
 <body>
-<header>
-  <h1>Technician Tools</h1>
-  <p>Reference apps for the field. Pick one.</p>
-</header>
-
-<main>
-  <a class="tool" href="flange/">
-    <img src="flange/icons/icon-192.png" alt="" width="76" height="76">
-    <div>
-      <h2>Flange ID</h2>
-      <p>Identify a flange from site measurements (DN, PN, Table D), browse EN 1092, BS 10 and ASME tables, and check flange adapters and converters.</p>
-      <span class="go">Open Flange ID →</span>
-    </div>
-  </a>
-
-  <a class="tool" href="pipes/">
-    <img src="pipes/icons/icon-192.png" alt="" width="76" height="76">
-    <div>
-      <h2>Pipe Reference</h2>
-      <p>Pipe OD, wall and bore by DN and material, coatings and suitability, and which couplings and flange adaptors fit.</p>
-      <span class="go">Open Pipe Reference →</span>
-    </div>
-  </a>
-
-  <div class="card">
-    <h3>Put an app on your home screen</h3>
-    <p style="margin:0">Each app installs on its own, so open the app first, then install it from there (not from this page):</p>
-    <ol>
-      <li><b>Android (Chrome):</b> open the app, tap ⋮, then <b>Install app</b>.</li>
-      <li><b>iPhone (Safari):</b> open the app, tap Share, then <b>Add to Home Screen</b>.</li>
-    </ol>
-    <p style="margin:8px 0 0">Once an app has been opened online, it works offline.</p>
-  </div>
-</main>
-
-<footer>
-  For guidance only. Check values against the current standard or the manufacturer's data before ordering parts or working on pressurised plant.
-</footer>
+  <p><a href="/tools/">Open Technician Tools</a></p>
 </body>
 </html>
