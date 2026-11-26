@@ -1,0 +1,17 @@
+{
+  "name": "Pipe Reference — pipe sizes and couplings",
+  "short_name": "Pipe Ref",
+  "description": "Pipe ODs, walls and bores by DN for steel, stainless, ductile iron, PE, PVC-U, GRP, AC, cast iron and clay, with materials guidance and coupling / flange adaptor ranges. Works offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f5f8",
+  "theme_color": "#0b5cad",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
