@@ -16,6 +16,9 @@ It is plain HTML, JS and SVG with no build step, and it works offline once opene
   - wide-range couplings whose single range spans both pipes
   - the Teekay Axiflex stepped band
   - the flange-adaptor options for each pipe
+- **Common in UK** (on by default, remembered as `pipeRef.ukCommon`): hides US-standard tables (ASME B36.10 / B36.19) across
+  By size, Couplings and Browse. A count shows how many non-UK sizes are hidden; turn it off to see them with a badge.
+  Typed coupling ODs still match even when the lists are filtered.
 - **Browse**: search all rows (e.g. `SDR11`, `C40`, `114.3`), filter by material and by service (e.g. drinking water, good
   only), plus a materials × services grid.
 
