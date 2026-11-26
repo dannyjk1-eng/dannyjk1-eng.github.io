@@ -97,6 +97,14 @@
   .pr-app .pr-verdict.caution { background: #fff3d6; color: #8a5d00; }
   .pr-app .pr-verdict.bad { background: #fdecea; color: var(--bad); }
   .pr-app footer { max-width: 1100px; margin: 0 auto; padding: 8px 14px 30px; font-size: .78rem; color: var(--muted); }
+  .pr-app .pr-ukbar { max-width: 1100px; margin: 0 auto; padding: 10px 12px 0; }
+  .pr-app .pr-ukbar .pr-ukinner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+    background: #fff; border: 2px solid var(--brand); border-radius: 10px; padding: 10px 14px; }
+  .pr-app .pr-ukbar label { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; }
+  .pr-app .pr-ukbar input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--brand); margin: 0; flex: none; }
+  .pr-app .pr-ukbar .hint { color: var(--muted); font-size: .82rem; font-weight: 400; }
+  .pr-app .pr-ukbar .pr-ukcount { font-size: .82rem; color: var(--muted); }
+  .pr-app .pill.nonuk { background: #fdecea; color: var(--bad); }
   @media (max-width: 480px) { .pr-app table.data th, .pr-app table.data td { padding: 3px 4px; } .pr-app .pr-hide-sm { display: none; } }
 </style>
 </head>
@@ -105,6 +113,14 @@
   <h1>Pipe Reference</h1>
   <p>Pipe ODs, walls and bores, materials, and which couplings and flange adaptors fit.</p>
 </header>
+
+<div class="pr-ukbar">
+  <div class="pr-ukinner">
+    <label for="pr-ukCommon"><input type="checkbox" id="pr-ukCommon" checked> Common in UK</label>
+    <span class="hint">Show sizes you are likely to meet on UK sites (hides ASME schedules).</span>
+    <span class="pr-ukcount" id="pr-ukCount"></span>
+  </div>
+</div>
 
 <nav class="pr-modes">
   <div class="seg" id="pr-modeSeg">
@@ -130,6 +146,7 @@
     </div>
     <div class="note">ID = OD − 2 × wall, <b>nominal</b> (no tolerances, no lining). “min” = the standard gives a minimum wall.
       Plastics are sized by OD: <b>≈DN</b> = equivalent bore (PE), <b>~DN</b> = OD close to steel of that DN. Tap a row for the drawing, materials and couplings.</div>
+    <div class="note" id="pr-sizeHidden" hidden></div>
     <div class="pr-tablewrap scroll" style="margin-top:8px">
       <table class="data" id="pr-sizeTable"></table>
     </div>
@@ -173,6 +190,7 @@
     </div>
     <div class="note">Measure the OD with a pi tape where you can — old pipe is often oval, corroded or over-coated.
       Ranges are the makers’ published sealing ranges; ✓/⚠/✗ are the makers’ own pipe-material statements.</div>
+    <div class="note" id="pr-cplHidden" hidden></div>
     <div class="pr-svg" id="pr-twoDraw" style="margin-top:8px"></div>
   </section>
   <section class="card">
@@ -226,6 +244,7 @@
  *   PIPE_DATA.sources    id -> { title, url }   (every value cites one)
  *   PIPE_DATA.materials  pipe materials: coatings, linings, suitability
  *   PIPE_DATA.series     one entry = one standard + one class/schedule/SDR
+ *                       each material and series has ukCommon: { ok, reason }
  *   PIPE_DATA.peDnEquiv  PE OD -> "matching" DN (equivalent bore)
  *   PIPE_DATA.couplings  couplings and flange adaptors with OD ranges
  *   PIPE_DATA.services   the suitability headings
@@ -986,6 +1005,75 @@ const PIPE_DATA = (() => {
   // EN 545:2010 Table 9 cement-mortar lining, nominal mm: [DN from, DN to, thickness]
   const liningEN545 = [[40, 300, 4], [350, 600, 5], [700, 1200, 6]];
 
+
+  /* ------------------------------------------------------------------
+   * UK-COMMON FLAGS
+   * Judgement is UK water / wastewater site practice, not a formal
+   * approved list. { ok: true/false, reason } is attached to every
+   * material and every series (standard + class). ASME B36.10 / B36.19
+   * are the non-UK tables; everything else listed here is commonly met
+   * on UK networks, including legacy CI/AC still found on repairs.
+   * ------------------------------------------------------------------ */
+  const ukMat = {
+    steel: [true, 'Carbon steel tube and pipe are common on UK sites; ASME schedule tables are listed separately and hidden by the UK filter.'],
+    stainless: [true, 'Stainless is common in treatment works and process plant; ISO 1127 is the usual UK/EN sizing, ASME 10S/40S is hidden by the UK filter.'],
+    di: [true, 'EN 545 ductile iron is the usual UK clean-water main.'],
+    dis: [true, 'EN 598 ductile iron is the usual UK pressure and gravity sewer iron pipe.'],
+    ci: [true, 'Legacy imperial cast iron (BS 78 / BS 1211) is still widely met on UK repairs.'],
+    ac: [true, 'Legacy asbestos cement (BS 486) is still widely met on UK repairs — measure the OD; do not cut dry.'],
+    pe: [true, 'PE80 / PE100 to EN 12201 is the usual UK plastic water and pressure pipe.'],
+    pvc: [true, 'PVC-U to EN 1452, and older BS 3505 imperial sizes, are common on UK pressure mains and services.'],
+    pvcs: [true, 'EN 1401 PVC-U is the usual UK gravity sewer plastic pipe.'],
+    grp: [true, 'GRP (BS 5480 / later EN 1796 and EN 14364) is used on UK large-diameter water and sewer mains.'],
+    clay: [true, 'Vitrified clay to EN 295 is still common in UK gravity drainage.'],
+    concrete: [true, 'EN 1916 concrete pipe is common in UK sewers and culverts; ODs vary by maker so no size table is listed.'],
+  };
+  for (const m of materials) {
+    const f = ukMat[m.id];
+    if (!f) throw new Error('missing ukCommon for material ' + m.id);
+    m.ukCommon = { ok: f[0], reason: f[1] };
+  }
+  function ukSeriesFlag(s) {
+    if (s.id.startsWith('B3610_') || /^ASME B36\.10/.test(s.standard))
+      return [false, 'ASME B36.10 schedule pipe is a US standard. UK water and process sites usually specify EN 10220 / EN 10216 / EN 10217, or EN 10255 for tube.'];
+    if (s.id.startsWith('B3619_') || s.standard === 'ASME B36.19')
+      return [false, 'ASME B36.19 (10S / 40S) is a US stainless schedule. UK sites usually use EN ISO 1127.'];
+    if (s.id.startsWith('EN545_'))
+      return [true, 'EN 545 ductile iron is the usual UK clean-water main; all C-classes are available (preferred class varies by DN).'];
+    if (s.id === 'K9')
+      return [true, 'K9 is the legacy ISO 2531 / EN 545:2006 thickness class; most UK DI laid before about 2010 is K9.'];
+    if (s.id.startsWith('EN598_'))
+      return [true, 'EN 598 ductile iron is the usual UK sewer iron pipe (pressure and gravity).'];
+    if (s.id.startsWith('EN10255_'))
+      return [true, 'EN 10255 (old BS 1387 medium/heavy) is the usual UK screwed and general-purpose steel tube.'];
+    if (s.id === 'EN10220')
+      return [true, 'EN 10220 series 1 ODs (EN 10216 seamless / EN 10217 welded) are the usual UK metric steel pipe sizes.'];
+    if (s.id.startsWith('ISO1127_'))
+      return [true, 'EN ISO 1127 is the usual UK/European stainless pipe sizing.'];
+    if (s.id.startsWith('PE100_'))
+      return [true, 'EN 12201 PE100 (and PE80 of the same OD and SDR) is the usual UK PE water and pressure pipe.'];
+    if (s.id.startsWith('EN1452_'))
+      return [true, 'EN 1452 PVC-U is the usual UK metric pressure PVC.'];
+    if (s.id === 'BS3505')
+      return [true, 'BS 3505 imperial PVC-U is still met on older UK services and repairs.'];
+    if (s.id.startsWith('EN1401_'))
+      return [true, 'EN 1401 PVC-U is the usual UK gravity sewer plastic pipe.'];
+    if (s.id.startsWith('IMP_CI_'))
+      return [true, 'Imperial cast iron (BS 78 / BS 1211) is legacy, but still common on UK repairs.'];
+    if (s.id.startsWith('IMP_AC_') || s.id.startsWith('AC486_'))
+      return [true, 'Asbestos cement (imperial and later metric BS 486) is legacy, but still common on UK repairs — measure the OD.'];
+    if (s.id === 'GRP5480')
+      return [true, 'BS 5480 GRP sizes are typical of UK large-diameter water and sewer mains (some GRP is made to DI ODs instead).'];
+    if (s.id === 'CLAY_SS')
+      return [true, 'EN 295 vitrified clay (e.g. Hepworth SuperSleve) is still common in UK gravity drainage.'];
+    return null;
+  }
+  for (const s of series) {
+    const f = ukSeriesFlag(s);
+    if (!f) throw new Error('missing ukCommon for series ' + s.id);
+    s.ukCommon = { ok: f[0], reason: f[1] };
+  }
+
   return { sources, services, materials, series, peDnEquiv, couplings, steppedTeekay, liningEN545 };
 })();
 
@@ -1044,6 +1132,7 @@ const PipeLogic = (() => {
           key: s.id + ':' + key, seriesId: s.id, material: s.material, standard: s.standard, cls: s.cls, label: s.label,
           dn, dnBasis, nps: v.nps || null, od: v.od, wall, id: bore, wallBasis: wall != null ? s.wallBasis : null,
           lining: s.lining === 'en545' && dn ? liningFor(dn) : null, flag, sources: s.sources,
+          ukCommon: !!(s.ukCommon && s.ukCommon.ok), ukReason: (s.ukCommon && s.ukCommon.reason) || '',
         });
       }
     }
@@ -1054,9 +1143,10 @@ const PipeLogic = (() => {
   const sortRows = (a, b) => MAT_ORDER.indexOf(a.material) - MAT_ORDER.indexOf(b.material) || a.od - b.od
     || (a.wall ?? 0) - (b.wall ?? 0);
 
-  /** All DNs that have at least one row (any basis), 15–1200. */
-  function dnList() {
-    return [...new Set(ROWS.map((r) => r.dn).filter((d) => d != null && d >= 15 && d <= 1200))].sort((a, b) => a - b);
+  /** All DNs that have at least one row (any basis), 15–1200. opts.ukOnly hides DNs with only non-UK rows. */
+  function dnList(opts = {}) {
+    const src = opts.ukOnly ? ROWS.filter((r) => r.ukCommon) : ROWS;
+    return [...new Set(src.map((r) => r.dn).filter((d) => d != null && d >= 15 && d <= 1200))].sort((a, b) => a - b);
   }
 
   /** Rows for one DN. opts.basis: 'all' (default) or 'nominal' (hide similar/matching plastic rows). */
@@ -1070,11 +1160,12 @@ const PipeLogic = (() => {
     return (m && m.suit[service]) || null;
   }
 
-  /** Filter rows. f = { material, service, level ('good'|'possible'), q, odMin, odMax } */
+  /** Filter rows. f = { material, service, level ('good'|'possible'), q, odMin, odMax, ukOnly } */
   function filterRows(rows, f = {}) {
     const q = (f.q || '').trim().toLowerCase();
     const num = q && !isNaN(+q) ? +q : null;
     return rows.filter((r) => {
+      if (f.ukOnly && !r.ukCommon) return false;
       if (f.material && r.material !== f.material) return false;
       if (f.service) {
         const s = suit(r.material, f.service);
@@ -1145,6 +1236,25 @@ const PipeLogic = (() => {
     return { lo, hi, diff, sameRange, stepped, adaptorPair: { a: fa(od1, mat1), b: fa(od2, mat2) } };
   }
 
+  /* "Common in UK" filter — on by default. Persistence uses the same
+   * pipeRef.ukCommon localStorage key as the screen code, so tests can
+   * check that a toggle round-trip is stored and read back. */
+  const UK_COMMON_DEFAULT = true;
+  function ukCommonGet(storage) {
+    if (!storage || typeof storage.getItem !== 'function') return UK_COMMON_DEFAULT;
+    try {
+      const v = storage.getItem('pipeRef.ukCommon');
+      return v == null ? UK_COMMON_DEFAULT : JSON.parse(v);
+    } catch (e) { return UK_COMMON_DEFAULT; }
+  }
+  function ukCommonSet(storage, on) {
+    storage.setItem('pipeRef.ukCommon', JSON.stringify(!!on));
+    return !!on;
+  }
+  function hiddenNonUk(rows, ukOnly) {
+    return ukOnly ? rows.filter((r) => !r.ukCommon).length : 0;
+  }
+
   /** Coverage summary for the README / report. */
   function coverage() {
     const byMat = {};
@@ -1156,7 +1266,7 @@ const PipeLogic = (() => {
   }
 
   return { data: D, MAT, SERIES, ROWS, similarDN, liningFor, dnList, rowsForDN, suit, filterRows,
-    matchCouplings, twoPipe, coverage, round };
+    matchCouplings, twoPipe, coverage, round, UK_COMMON_DEFAULT, ukCommonGet, ukCommonSet, hiddenNonUk };
 })();
 
 if (typeof module !== 'undefined') module.exports = { PipeLogic };
@@ -1260,14 +1370,33 @@ const PipeUI = (() => {
   const swatch = (m) => `<span class="swatch" style="background:${MAT[m].colour}"></span>`;
   const dnTag = (r) => r.dnBasis === 'matching' ? `≈DN${r.dn}` : r.dnBasis === 'similar' ? `~DN${r.dn}` : `DN${r.dn}`;
 
-  const st = { dn: store.get('dn', 100), sel: null, tab: store.get('tab', 'size'), plastic: store.get('showPlastic', true) };
-  const DNS = L.dnList();
+  const st = { dn: store.get('dn', 100), sel: null, tab: store.get('tab', 'size'), plastic: store.get('showPlastic', true),
+    ukOnly: L.ukCommonGet(localStorage) };
+  function activeDns() { return L.dnList({ ukOnly: st.ukOnly }); }
+  function hiddenMsg(n, extra) {
+    if (!n) return '';
+    return n + ' non-UK size' + (n === 1 ? '' : 's') + ' hidden' + (extra || '');
+  }
+  function setHiddenNote(id, n, extra) {
+    const el = $(id), msg = hiddenMsg(n, extra);
+    el.hidden = !msg; el.textContent = msg;
+    return msg;
+  }
+  function fillDnSelect() {
+    const list = activeDns();
+    if (st.dn && !list.includes(st.dn) && L.dnList().includes(st.dn)) {
+      list.push(st.dn); list.sort((a, b) => a - b);
+    }
+    $('dn').innerHTML = list.map((d) => `<option value="${d}">DN ${d}</option>`).join('');
+  }
 
   /* ---------- tabs ---------- */
   function setTab(t) {
     st.tab = t; store.set('tab', t);
     document.querySelectorAll('#pr-modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === t));
     $('sizeMain').hidden = t !== 'size'; $('coupleMain').hidden = t !== 'couple'; $('browseMain').hidden = t !== 'browse';
+    if (t === 'size') renderSize();
+    if (t === 'couple') renderCouple();
     if (t === 'browse') renderBrowse();
   }
 
@@ -1275,26 +1404,38 @@ const PipeUI = (() => {
   function rowHTML(r, cols) {
     const sel = st.sel === r.key ? ' sel' : '';
     const flag = r.flag ? ` <span title="${esc(r.flag)}">⚠</span>` : '';
+    const badge = (!st.ukOnly && !r.ukCommon) ? ' ' + pill('nonuk', 'non-UK') : '';
     const sub = [r.nps, r.dnBasis !== 'nominal' ? dnTag(r) : null, r.wallBasis === 'derived' ? 'wall derived' : null].filter(Boolean).join(' · ');
     const cells = { mat: `<td class="l pr-hide-sm">${esc(MAT[r.material].short)}</td>`,
       dn: `<td>${esc(dnTag(r))}</td>` };
     return `<tr class="${sel}" data-key="${esc(r.key)}">${cols.includes('mat') ? cells.mat : ''}`
-      + `<td class="l">${cols.includes('mat') ? swatch(r.material) : ''}${esc(r.standard)} <b>${esc(r.cls)}</b>${flag}${sub ? `<small>${esc(sub)}</small>` : ''}</td>`
+      + `<td class="l">${cols.includes('mat') ? swatch(r.material) : ''}${esc(r.standard)} <b>${esc(r.cls)}</b>${flag}${badge}${sub ? `<small>${esc(sub)}</small>` : ''}</td>`
       + `${cols.includes('dn') ? cells.dn : ''}<td><b>${n(r.od)}</b></td><td>${n(r.wall)}${r.wallBasis === 'minimum' ? '<small>min</small>' : ''}</td><td>${n(r.id)}</td></tr>`;
   }
 
   function renderSize() {
-    if (!DNS.includes(st.dn)) st.dn = 100;
+    const DNS = activeDns();
+    if (!L.dnList().includes(st.dn)) st.dn = 100;
+    fillDnSelect();
     $('dn').value = st.dn; store.set('dn', st.dn);
-    $('dnPrev').disabled = DNS.indexOf(st.dn) <= 0; $('dnNext').disabled = DNS.indexOf(st.dn) >= DNS.length - 1;
-    const rows = L.rowsForDN(st.dn, { basis: st.plastic ? 'all' : 'nominal' });
+    // Stepper uses the UK-filtered DN list; a DN only in the full list still has neighbours.
+    const stepList = DNS.length ? DNS : L.dnList();
+    const stepAt = stepList.indexOf(st.dn);
+    const prevAt = stepAt >= 0 ? stepAt : stepList.filter((d) => d < st.dn).length;
+    $('dnPrev').disabled = prevAt <= 0;
+    $('dnNext').disabled = (stepAt >= 0 ? stepAt : prevAt - 1) >= stepList.length - 1;
+    const all = L.rowsForDN(st.dn, { basis: st.plastic ? 'all' : 'nominal' });
+    const hidden = L.hiddenNonUk(all, st.ukOnly);
+    const rows = st.ukOnly ? all.filter((r) => r.ukCommon) : all;
+    setHiddenNote('sizeHidden', hidden);
+    if (st.tab === 'size') $('ukCount').textContent = hiddenMsg(hidden);
     let html = '<thead><tr><th class="l">Standard · class</th><th>OD</th><th>Wall</th><th>ID nom.</th></tr></thead><tbody>';
     let last = null;
     for (const r of rows) {
       if (r.material !== last) { last = r.material; html += `<tr class="grp"><td colspan="4">${swatch(r.material)}${esc(MAT[r.material].name)}</td></tr>`; }
       html += rowHTML(r, []);
     }
-    if (!rows.length) html += '<tr><td colspan="4" class="l">No rows for this DN.</td></tr>';
+    if (!rows.length) html += '<tr><td colspan="4" class="l">No rows for this DN' + (hidden ? ' with the UK filter on.' : '.') + '</td></tr>';
     $('sizeTable').innerHTML = html + '</tbody>';
     if (!rows.find((r) => r.key === st.sel)) st.sel = (rows.find((r) => r.wall != null) || rows[0] || {}).key || null;
     markSel(); renderDetail();
@@ -1362,7 +1503,7 @@ const PipeUI = (() => {
   }
 
   function sizeOptions(mat) {
-    const rows = L.ROWS.filter((r) => r.material === mat);
+    const rows = L.ROWS.filter((r) => r.material === mat && (!st.ukOnly || r.ukCommon));
     const seen = new Set(), opts = ['<option value="">— pick —</option>'];
     rows.sort((a, b) => a.od - b.od).forEach((r) => {
       const k = r.od + '|' + r.standard; if (seen.has(k)) return; seen.add(k);
@@ -1376,6 +1517,11 @@ const PipeUI = (() => {
     const two = $('twoOn').checked; $('bWrap').hidden = !two;
     const bMat = $('bMat').value, bOd = parseFloat($('bOd').value);
     store.set('couple', { aMat, aOd: $('aOd').value, two, bMat, bOd: $('bOd').value });
+    const mats = two ? [aMat, bMat] : [aMat];
+    const pickRows = L.ROWS.filter((r) => mats.includes(r.material));
+    const cplHidden = L.hiddenNonUk(pickRows, st.ukOnly);
+    setHiddenNote('cplHidden', cplHidden, ' from the lists — typed ODs still match.');
+    if (st.tab === 'couple') $('ukCount').textContent = hiddenMsg(cplHidden, ' from the lists');
     $('twoDraw').innerHTML = '';
     if (!(aOd > 0)) { $('cplTitle').textContent = 'What fits'; $('cplOut').innerHTML = '<div class="empty">Enter an OD or pick a size.</div>'; return; }
     if (!two || !(bOd > 0)) {
@@ -1432,8 +1578,13 @@ const PipeUI = (() => {
   let level = 'good';
   function renderBrowse() {
     const f = { q: $('q').value, material: $('fMat').value || null, service: $('fSvc').value || null, level };
-    const rows = L.filterRows(L.ROWS, f), MAX = 400;
-    $('bCount').textContent = `${rows.length} rows${rows.length > MAX ? ` — showing the first ${MAX}; narrow the search` : ''}.`;
+    const all = L.filterRows(L.ROWS, f);
+    const hidden = L.hiddenNonUk(all, st.ukOnly);
+    const rows = st.ukOnly ? all.filter((r) => r.ukCommon) : all, MAX = 400;
+    const hideNote = hiddenMsg(hidden);
+    $('bCount').textContent = `${rows.length} rows${rows.length > MAX ? ` — showing the first ${MAX}; narrow the search` : ''}.`
+      + (hideNote ? ' ' + hideNote + '.' : '');
+    if (st.tab === 'browse') $('ukCount').textContent = hideNote;
     $('bTable').innerHTML = '<thead><tr><th class="l pr-hide-sm">Material</th><th class="l">Standard · class</th><th>DN</th><th>OD</th><th>Wall</th><th>ID nom.</th></tr></thead><tbody>'
       + rows.slice(0, MAX).map((r) => rowHTML(r, ['mat', 'dn'])).join('') + '</tbody>';
   }
@@ -1447,8 +1598,9 @@ const PipeUI = (() => {
 
   /* ---------- wiring ---------- */
   function init() {
-    $('dn').innerHTML = DNS.map((d) => `<option value="${d}">DN ${d}</option>`).join('');
+    fillDnSelect();
     $('showPlastic').checked = st.plastic;
+    $('ukCommon').checked = st.ukOnly;
     const matOpts = D.materials.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
     $('aMat').innerHTML = $('bMat').innerHTML = matOpts;
     $('fMat').innerHTML = '<option value="">All materials</option>' + matOpts;
@@ -1457,9 +1609,23 @@ const PipeUI = (() => {
 
     document.querySelectorAll('#pr-modeSeg button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.mode)));
     $('dn').addEventListener('change', () => { st.dn = +$('dn').value; st.sel = null; renderSize(); });
-    $('dnPrev').addEventListener('click', () => { st.dn = DNS[Math.max(0, DNS.indexOf(st.dn) - 1)]; st.sel = null; renderSize(); });
-    $('dnNext').addEventListener('click', () => { st.dn = DNS[Math.min(DNS.length - 1, DNS.indexOf(st.dn) + 1)]; st.sel = null; renderSize(); });
+    const stepDn = (dir) => {
+      const list = activeDns().length ? activeDns() : L.dnList();
+      let i = list.indexOf(st.dn);
+      if (i < 0) i = dir < 0 ? list.filter((d) => d < st.dn).length : Math.max(0, list.filter((d) => d <= st.dn).length - 1);
+      st.dn = list[Math.max(0, Math.min(list.length - 1, i + dir))]; st.sel = null; renderSize();
+    };
+    $('dnPrev').addEventListener('click', () => stepDn(-1));
+    $('dnNext').addEventListener('click', () => stepDn(1));
     $('showPlastic').addEventListener('change', () => { st.plastic = $('showPlastic').checked; store.set('showPlastic', st.plastic); renderSize(); });
+    $('ukCommon').addEventListener('change', () => {
+      st.ukOnly = $('ukCommon').checked;
+      L.ukCommonSet(localStorage, st.ukOnly);
+      fillDnSelect();
+      const fillPick = (w) => { $(w + 'Pick').innerHTML = sizeOptions($(w + 'Mat').value); };
+      fillPick('a'); fillPick('b');
+      renderSize(); renderCouple(); renderBrowse();
+    });
     $('showLining').addEventListener('change', renderDetail);
     $('sizeTable').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-key]'); if (!tr) return; st.sel = tr.dataset.key; markSel(); renderDetail();
       if (window.innerWidth < 900) $('detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); });

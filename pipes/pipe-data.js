@@ -8,6 +8,7 @@
  *   PIPE_DATA.sources    id -> { title, url }   (every value cites one)
  *   PIPE_DATA.materials  pipe materials: coatings, linings, suitability
  *   PIPE_DATA.series     one entry = one standard + one class/schedule/SDR
+ *                       each material and series has ukCommon: { ok, reason }
  *   PIPE_DATA.peDnEquiv  PE OD -> "matching" DN (equivalent bore)
  *   PIPE_DATA.couplings  couplings and flange adaptors with OD ranges
  *   PIPE_DATA.services   the suitability headings
@@ -767,6 +768,75 @@ const PIPE_DATA = (() => {
 
   // EN 545:2010 Table 9 cement-mortar lining, nominal mm: [DN from, DN to, thickness]
   const liningEN545 = [[40, 300, 4], [350, 600, 5], [700, 1200, 6]];
+
+
+  /* ------------------------------------------------------------------
+   * UK-COMMON FLAGS
+   * Judgement is UK water / wastewater site practice, not a formal
+   * approved list. { ok: true/false, reason } is attached to every
+   * material and every series (standard + class). ASME B36.10 / B36.19
+   * are the non-UK tables; everything else listed here is commonly met
+   * on UK networks, including legacy CI/AC still found on repairs.
+   * ------------------------------------------------------------------ */
+  const ukMat = {
+    steel: [true, 'Carbon steel tube and pipe are common on UK sites; ASME schedule tables are listed separately and hidden by the UK filter.'],
+    stainless: [true, 'Stainless is common in treatment works and process plant; ISO 1127 is the usual UK/EN sizing, ASME 10S/40S is hidden by the UK filter.'],
+    di: [true, 'EN 545 ductile iron is the usual UK clean-water main.'],
+    dis: [true, 'EN 598 ductile iron is the usual UK pressure and gravity sewer iron pipe.'],
+    ci: [true, 'Legacy imperial cast iron (BS 78 / BS 1211) is still widely met on UK repairs.'],
+    ac: [true, 'Legacy asbestos cement (BS 486) is still widely met on UK repairs — measure the OD; do not cut dry.'],
+    pe: [true, 'PE80 / PE100 to EN 12201 is the usual UK plastic water and pressure pipe.'],
+    pvc: [true, 'PVC-U to EN 1452, and older BS 3505 imperial sizes, are common on UK pressure mains and services.'],
+    pvcs: [true, 'EN 1401 PVC-U is the usual UK gravity sewer plastic pipe.'],
+    grp: [true, 'GRP (BS 5480 / later EN 1796 and EN 14364) is used on UK large-diameter water and sewer mains.'],
+    clay: [true, 'Vitrified clay to EN 295 is still common in UK gravity drainage.'],
+    concrete: [true, 'EN 1916 concrete pipe is common in UK sewers and culverts; ODs vary by maker so no size table is listed.'],
+  };
+  for (const m of materials) {
+    const f = ukMat[m.id];
+    if (!f) throw new Error('missing ukCommon for material ' + m.id);
+    m.ukCommon = { ok: f[0], reason: f[1] };
+  }
+  function ukSeriesFlag(s) {
+    if (s.id.startsWith('B3610_') || /^ASME B36\.10/.test(s.standard))
+      return [false, 'ASME B36.10 schedule pipe is a US standard. UK water and process sites usually specify EN 10220 / EN 10216 / EN 10217, or EN 10255 for tube.'];
+    if (s.id.startsWith('B3619_') || s.standard === 'ASME B36.19')
+      return [false, 'ASME B36.19 (10S / 40S) is a US stainless schedule. UK sites usually use EN ISO 1127.'];
+    if (s.id.startsWith('EN545_'))
+      return [true, 'EN 545 ductile iron is the usual UK clean-water main; all C-classes are available (preferred class varies by DN).'];
+    if (s.id === 'K9')
+      return [true, 'K9 is the legacy ISO 2531 / EN 545:2006 thickness class; most UK DI laid before about 2010 is K9.'];
+    if (s.id.startsWith('EN598_'))
+      return [true, 'EN 598 ductile iron is the usual UK sewer iron pipe (pressure and gravity).'];
+    if (s.id.startsWith('EN10255_'))
+      return [true, 'EN 10255 (old BS 1387 medium/heavy) is the usual UK screwed and general-purpose steel tube.'];
+    if (s.id === 'EN10220')
+      return [true, 'EN 10220 series 1 ODs (EN 10216 seamless / EN 10217 welded) are the usual UK metric steel pipe sizes.'];
+    if (s.id.startsWith('ISO1127_'))
+      return [true, 'EN ISO 1127 is the usual UK/European stainless pipe sizing.'];
+    if (s.id.startsWith('PE100_'))
+      return [true, 'EN 12201 PE100 (and PE80 of the same OD and SDR) is the usual UK PE water and pressure pipe.'];
+    if (s.id.startsWith('EN1452_'))
+      return [true, 'EN 1452 PVC-U is the usual UK metric pressure PVC.'];
+    if (s.id === 'BS3505')
+      return [true, 'BS 3505 imperial PVC-U is still met on older UK services and repairs.'];
+    if (s.id.startsWith('EN1401_'))
+      return [true, 'EN 1401 PVC-U is the usual UK gravity sewer plastic pipe.'];
+    if (s.id.startsWith('IMP_CI_'))
+      return [true, 'Imperial cast iron (BS 78 / BS 1211) is legacy, but still common on UK repairs.'];
+    if (s.id.startsWith('IMP_AC_') || s.id.startsWith('AC486_'))
+      return [true, 'Asbestos cement (imperial and later metric BS 486) is legacy, but still common on UK repairs — measure the OD.'];
+    if (s.id === 'GRP5480')
+      return [true, 'BS 5480 GRP sizes are typical of UK large-diameter water and sewer mains (some GRP is made to DI ODs instead).'];
+    if (s.id === 'CLAY_SS')
+      return [true, 'EN 295 vitrified clay (e.g. Hepworth SuperSleve) is still common in UK gravity drainage.'];
+    return null;
+  }
+  for (const s of series) {
+    const f = ukSeriesFlag(s);
+    if (!f) throw new Error('missing ukCommon for series ' + s.id);
+    s.ukCommon = { ok: f[0], reason: f[1] };
+  }
 
   return { sources, services, materials, series, peDnEquiv, couplings, steppedTeekay, liningEN545 };
 })();

@@ -97,6 +97,14 @@
   .pr-app .pr-verdict.caution { background: #fff3d6; color: #8a5d00; }
   .pr-app .pr-verdict.bad { background: #fdecea; color: var(--bad); }
   .pr-app footer { max-width: 1100px; margin: 0 auto; padding: 8px 14px 30px; font-size: .78rem; color: var(--muted); }
+  .pr-app .pr-ukbar { max-width: 1100px; margin: 0 auto; padding: 10px 12px 0; }
+  .pr-app .pr-ukbar .pr-ukinner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+    background: #fff; border: 2px solid var(--brand); border-radius: 10px; padding: 10px 14px; }
+  .pr-app .pr-ukbar label { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; }
+  .pr-app .pr-ukbar input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--brand); margin: 0; flex: none; }
+  .pr-app .pr-ukbar .hint { color: var(--muted); font-size: .82rem; font-weight: 400; }
+  .pr-app .pr-ukbar .pr-ukcount { font-size: .82rem; color: var(--muted); }
+  .pr-app .pill.nonuk { background: #fdecea; color: var(--bad); }
   @media (max-width: 480px) { .pr-app table.data th, .pr-app table.data td { padding: 3px 4px; } .pr-app .pr-hide-sm { display: none; } }
 </style>
 </head>
@@ -105,6 +113,14 @@
   <h1>Pipe Reference</h1>
   <p>Pipe ODs, walls and bores, materials, and which couplings and flange adaptors fit.</p>
 </header>
+
+<div class="pr-ukbar">
+  <div class="pr-ukinner">
+    <label for="pr-ukCommon"><input type="checkbox" id="pr-ukCommon" checked> Common in UK</label>
+    <span class="hint">Show sizes you are likely to meet on UK sites (hides ASME schedules).</span>
+    <span class="pr-ukcount" id="pr-ukCount"></span>
+  </div>
+</div>
 
 <nav class="pr-modes">
   <div class="seg" id="pr-modeSeg">
@@ -130,6 +146,7 @@
     </div>
     <div class="note">ID = OD − 2 × wall, <b>nominal</b> (no tolerances, no lining). “min” = the standard gives a minimum wall.
       Plastics are sized by OD: <b>≈DN</b> = equivalent bore (PE), <b>~DN</b> = OD close to steel of that DN. Tap a row for the drawing, materials and couplings.</div>
+    <div class="note" id="pr-sizeHidden" hidden></div>
     <div class="pr-tablewrap scroll" style="margin-top:8px">
       <table class="data" id="pr-sizeTable"></table>
     </div>
@@ -173,6 +190,7 @@
     </div>
     <div class="note">Measure the OD with a pi tape where you can — old pipe is often oval, corroded or over-coated.
       Ranges are the makers’ published sealing ranges; ✓/⚠/✗ are the makers’ own pipe-material statements.</div>
+    <div class="note" id="pr-cplHidden" hidden></div>
     <div class="pr-svg" id="pr-twoDraw" style="margin-top:8px"></div>
   </section>
   <section class="card">
@@ -234,14 +252,33 @@ const PipeUI = (() => {
   const swatch = (m) => `<span class="swatch" style="background:${MAT[m].colour}"></span>`;
   const dnTag = (r) => r.dnBasis === 'matching' ? `≈DN${r.dn}` : r.dnBasis === 'similar' ? `~DN${r.dn}` : `DN${r.dn}`;
 
-  const st = { dn: store.get('dn', 100), sel: null, tab: store.get('tab', 'size'), plastic: store.get('showPlastic', true) };
-  const DNS = L.dnList();
+  const st = { dn: store.get('dn', 100), sel: null, tab: store.get('tab', 'size'), plastic: store.get('showPlastic', true),
+    ukOnly: L.ukCommonGet(localStorage) };
+  function activeDns() { return L.dnList({ ukOnly: st.ukOnly }); }
+  function hiddenMsg(n, extra) {
+    if (!n) return '';
+    return n + ' non-UK size' + (n === 1 ? '' : 's') + ' hidden' + (extra || '');
+  }
+  function setHiddenNote(id, n, extra) {
+    const el = $(id), msg = hiddenMsg(n, extra);
+    el.hidden = !msg; el.textContent = msg;
+    return msg;
+  }
+  function fillDnSelect() {
+    const list = activeDns();
+    if (st.dn && !list.includes(st.dn) && L.dnList().includes(st.dn)) {
+      list.push(st.dn); list.sort((a, b) => a - b);
+    }
+    $('dn').innerHTML = list.map((d) => `<option value="${d}">DN ${d}</option>`).join('');
+  }
 
   /* ---------- tabs ---------- */
   function setTab(t) {
     st.tab = t; store.set('tab', t);
     document.querySelectorAll('#pr-modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === t));
     $('sizeMain').hidden = t !== 'size'; $('coupleMain').hidden = t !== 'couple'; $('browseMain').hidden = t !== 'browse';
+    if (t === 'size') renderSize();
+    if (t === 'couple') renderCouple();
     if (t === 'browse') renderBrowse();
   }
 
@@ -249,26 +286,38 @@ const PipeUI = (() => {
   function rowHTML(r, cols) {
     const sel = st.sel === r.key ? ' sel' : '';
     const flag = r.flag ? ` <span title="${esc(r.flag)}">⚠</span>` : '';
+    const badge = (!st.ukOnly && !r.ukCommon) ? ' ' + pill('nonuk', 'non-UK') : '';
     const sub = [r.nps, r.dnBasis !== 'nominal' ? dnTag(r) : null, r.wallBasis === 'derived' ? 'wall derived' : null].filter(Boolean).join(' · ');
     const cells = { mat: `<td class="l pr-hide-sm">${esc(MAT[r.material].short)}</td>`,
       dn: `<td>${esc(dnTag(r))}</td>` };
     return `<tr class="${sel}" data-key="${esc(r.key)}">${cols.includes('mat') ? cells.mat : ''}`
-      + `<td class="l">${cols.includes('mat') ? swatch(r.material) : ''}${esc(r.standard)} <b>${esc(r.cls)}</b>${flag}${sub ? `<small>${esc(sub)}</small>` : ''}</td>`
+      + `<td class="l">${cols.includes('mat') ? swatch(r.material) : ''}${esc(r.standard)} <b>${esc(r.cls)}</b>${flag}${badge}${sub ? `<small>${esc(sub)}</small>` : ''}</td>`
       + `${cols.includes('dn') ? cells.dn : ''}<td><b>${n(r.od)}</b></td><td>${n(r.wall)}${r.wallBasis === 'minimum' ? '<small>min</small>' : ''}</td><td>${n(r.id)}</td></tr>`;
   }
 
   function renderSize() {
-    if (!DNS.includes(st.dn)) st.dn = 100;
+    const DNS = activeDns();
+    if (!L.dnList().includes(st.dn)) st.dn = 100;
+    fillDnSelect();
     $('dn').value = st.dn; store.set('dn', st.dn);
-    $('dnPrev').disabled = DNS.indexOf(st.dn) <= 0; $('dnNext').disabled = DNS.indexOf(st.dn) >= DNS.length - 1;
-    const rows = L.rowsForDN(st.dn, { basis: st.plastic ? 'all' : 'nominal' });
+    // Stepper uses the UK-filtered DN list; a DN only in the full list still has neighbours.
+    const stepList = DNS.length ? DNS : L.dnList();
+    const stepAt = stepList.indexOf(st.dn);
+    const prevAt = stepAt >= 0 ? stepAt : stepList.filter((d) => d < st.dn).length;
+    $('dnPrev').disabled = prevAt <= 0;
+    $('dnNext').disabled = (stepAt >= 0 ? stepAt : prevAt - 1) >= stepList.length - 1;
+    const all = L.rowsForDN(st.dn, { basis: st.plastic ? 'all' : 'nominal' });
+    const hidden = L.hiddenNonUk(all, st.ukOnly);
+    const rows = st.ukOnly ? all.filter((r) => r.ukCommon) : all;
+    setHiddenNote('sizeHidden', hidden);
+    if (st.tab === 'size') $('ukCount').textContent = hiddenMsg(hidden);
     let html = '<thead><tr><th class="l">Standard · class</th><th>OD</th><th>Wall</th><th>ID nom.</th></tr></thead><tbody>';
     let last = null;
     for (const r of rows) {
       if (r.material !== last) { last = r.material; html += `<tr class="grp"><td colspan="4">${swatch(r.material)}${esc(MAT[r.material].name)}</td></tr>`; }
       html += rowHTML(r, []);
     }
-    if (!rows.length) html += '<tr><td colspan="4" class="l">No rows for this DN.</td></tr>';
+    if (!rows.length) html += '<tr><td colspan="4" class="l">No rows for this DN' + (hidden ? ' with the UK filter on.' : '.') + '</td></tr>';
     $('sizeTable').innerHTML = html + '</tbody>';
     if (!rows.find((r) => r.key === st.sel)) st.sel = (rows.find((r) => r.wall != null) || rows[0] || {}).key || null;
     markSel(); renderDetail();
@@ -336,7 +385,7 @@ const PipeUI = (() => {
   }
 
   function sizeOptions(mat) {
-    const rows = L.ROWS.filter((r) => r.material === mat);
+    const rows = L.ROWS.filter((r) => r.material === mat && (!st.ukOnly || r.ukCommon));
     const seen = new Set(), opts = ['<option value="">— pick —</option>'];
     rows.sort((a, b) => a.od - b.od).forEach((r) => {
       const k = r.od + '|' + r.standard; if (seen.has(k)) return; seen.add(k);
@@ -350,6 +399,11 @@ const PipeUI = (() => {
     const two = $('twoOn').checked; $('bWrap').hidden = !two;
     const bMat = $('bMat').value, bOd = parseFloat($('bOd').value);
     store.set('couple', { aMat, aOd: $('aOd').value, two, bMat, bOd: $('bOd').value });
+    const mats = two ? [aMat, bMat] : [aMat];
+    const pickRows = L.ROWS.filter((r) => mats.includes(r.material));
+    const cplHidden = L.hiddenNonUk(pickRows, st.ukOnly);
+    setHiddenNote('cplHidden', cplHidden, ' from the lists — typed ODs still match.');
+    if (st.tab === 'couple') $('ukCount').textContent = hiddenMsg(cplHidden, ' from the lists');
     $('twoDraw').innerHTML = '';
     if (!(aOd > 0)) { $('cplTitle').textContent = 'What fits'; $('cplOut').innerHTML = '<div class="empty">Enter an OD or pick a size.</div>'; return; }
     if (!two || !(bOd > 0)) {
@@ -406,8 +460,13 @@ const PipeUI = (() => {
   let level = 'good';
   function renderBrowse() {
     const f = { q: $('q').value, material: $('fMat').value || null, service: $('fSvc').value || null, level };
-    const rows = L.filterRows(L.ROWS, f), MAX = 400;
-    $('bCount').textContent = `${rows.length} rows${rows.length > MAX ? ` — showing the first ${MAX}; narrow the search` : ''}.`;
+    const all = L.filterRows(L.ROWS, f);
+    const hidden = L.hiddenNonUk(all, st.ukOnly);
+    const rows = st.ukOnly ? all.filter((r) => r.ukCommon) : all, MAX = 400;
+    const hideNote = hiddenMsg(hidden);
+    $('bCount').textContent = `${rows.length} rows${rows.length > MAX ? ` — showing the first ${MAX}; narrow the search` : ''}.`
+      + (hideNote ? ' ' + hideNote + '.' : '');
+    if (st.tab === 'browse') $('ukCount').textContent = hideNote;
     $('bTable').innerHTML = '<thead><tr><th class="l pr-hide-sm">Material</th><th class="l">Standard · class</th><th>DN</th><th>OD</th><th>Wall</th><th>ID nom.</th></tr></thead><tbody>'
       + rows.slice(0, MAX).map((r) => rowHTML(r, ['mat', 'dn'])).join('') + '</tbody>';
   }
@@ -421,8 +480,9 @@ const PipeUI = (() => {
 
   /* ---------- wiring ---------- */
   function init() {
-    $('dn').innerHTML = DNS.map((d) => `<option value="${d}">DN ${d}</option>`).join('');
+    fillDnSelect();
     $('showPlastic').checked = st.plastic;
+    $('ukCommon').checked = st.ukOnly;
     const matOpts = D.materials.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
     $('aMat').innerHTML = $('bMat').innerHTML = matOpts;
     $('fMat').innerHTML = '<option value="">All materials</option>' + matOpts;
@@ -431,9 +491,23 @@ const PipeUI = (() => {
 
     document.querySelectorAll('#pr-modeSeg button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.mode)));
     $('dn').addEventListener('change', () => { st.dn = +$('dn').value; st.sel = null; renderSize(); });
-    $('dnPrev').addEventListener('click', () => { st.dn = DNS[Math.max(0, DNS.indexOf(st.dn) - 1)]; st.sel = null; renderSize(); });
-    $('dnNext').addEventListener('click', () => { st.dn = DNS[Math.min(DNS.length - 1, DNS.indexOf(st.dn) + 1)]; st.sel = null; renderSize(); });
+    const stepDn = (dir) => {
+      const list = activeDns().length ? activeDns() : L.dnList();
+      let i = list.indexOf(st.dn);
+      if (i < 0) i = dir < 0 ? list.filter((d) => d < st.dn).length : Math.max(0, list.filter((d) => d <= st.dn).length - 1);
+      st.dn = list[Math.max(0, Math.min(list.length - 1, i + dir))]; st.sel = null; renderSize();
+    };
+    $('dnPrev').addEventListener('click', () => stepDn(-1));
+    $('dnNext').addEventListener('click', () => stepDn(1));
     $('showPlastic').addEventListener('change', () => { st.plastic = $('showPlastic').checked; store.set('showPlastic', st.plastic); renderSize(); });
+    $('ukCommon').addEventListener('change', () => {
+      st.ukOnly = $('ukCommon').checked;
+      L.ukCommonSet(localStorage, st.ukOnly);
+      fillDnSelect();
+      const fillPick = (w) => { $(w + 'Pick').innerHTML = sizeOptions($(w + 'Mat').value); };
+      fillPick('a'); fillPick('b');
+      renderSize(); renderCouple(); renderBrowse();
+    });
     $('showLining').addEventListener('change', renderDetail);
     $('sizeTable').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-key]'); if (!tr) return; st.sel = tr.dataset.key; markSel(); renderDetail();
       if (window.innerWidth < 900) $('detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); });

@@ -49,6 +49,7 @@ const PipeLogic = (() => {
           key: s.id + ':' + key, seriesId: s.id, material: s.material, standard: s.standard, cls: s.cls, label: s.label,
           dn, dnBasis, nps: v.nps || null, od: v.od, wall, id: bore, wallBasis: wall != null ? s.wallBasis : null,
           lining: s.lining === 'en545' && dn ? liningFor(dn) : null, flag, sources: s.sources,
+          ukCommon: !!(s.ukCommon && s.ukCommon.ok), ukReason: (s.ukCommon && s.ukCommon.reason) || '',
         });
       }
     }
@@ -59,9 +60,10 @@ const PipeLogic = (() => {
   const sortRows = (a, b) => MAT_ORDER.indexOf(a.material) - MAT_ORDER.indexOf(b.material) || a.od - b.od
     || (a.wall ?? 0) - (b.wall ?? 0);
 
-  /** All DNs that have at least one row (any basis), 15–1200. */
-  function dnList() {
-    return [...new Set(ROWS.map((r) => r.dn).filter((d) => d != null && d >= 15 && d <= 1200))].sort((a, b) => a - b);
+  /** All DNs that have at least one row (any basis), 15–1200. opts.ukOnly hides DNs with only non-UK rows. */
+  function dnList(opts = {}) {
+    const src = opts.ukOnly ? ROWS.filter((r) => r.ukCommon) : ROWS;
+    return [...new Set(src.map((r) => r.dn).filter((d) => d != null && d >= 15 && d <= 1200))].sort((a, b) => a - b);
   }
 
   /** Rows for one DN. opts.basis: 'all' (default) or 'nominal' (hide similar/matching plastic rows). */
@@ -75,11 +77,12 @@ const PipeLogic = (() => {
     return (m && m.suit[service]) || null;
   }
 
-  /** Filter rows. f = { material, service, level ('good'|'possible'), q, odMin, odMax } */
+  /** Filter rows. f = { material, service, level ('good'|'possible'), q, odMin, odMax, ukOnly } */
   function filterRows(rows, f = {}) {
     const q = (f.q || '').trim().toLowerCase();
     const num = q && !isNaN(+q) ? +q : null;
     return rows.filter((r) => {
+      if (f.ukOnly && !r.ukCommon) return false;
       if (f.material && r.material !== f.material) return false;
       if (f.service) {
         const s = suit(r.material, f.service);
@@ -150,6 +153,25 @@ const PipeLogic = (() => {
     return { lo, hi, diff, sameRange, stepped, adaptorPair: { a: fa(od1, mat1), b: fa(od2, mat2) } };
   }
 
+  /* "Common in UK" filter — on by default. Persistence uses the same
+   * pipeRef.ukCommon localStorage key as the screen code, so tests can
+   * check that a toggle round-trip is stored and read back. */
+  const UK_COMMON_DEFAULT = true;
+  function ukCommonGet(storage) {
+    if (!storage || typeof storage.getItem !== 'function') return UK_COMMON_DEFAULT;
+    try {
+      const v = storage.getItem('pipeRef.ukCommon');
+      return v == null ? UK_COMMON_DEFAULT : JSON.parse(v);
+    } catch (e) { return UK_COMMON_DEFAULT; }
+  }
+  function ukCommonSet(storage, on) {
+    storage.setItem('pipeRef.ukCommon', JSON.stringify(!!on));
+    return !!on;
+  }
+  function hiddenNonUk(rows, ukOnly) {
+    return ukOnly ? rows.filter((r) => !r.ukCommon).length : 0;
+  }
+
   /** Coverage summary for the README / report. */
   function coverage() {
     const byMat = {};
@@ -161,7 +183,7 @@ const PipeLogic = (() => {
   }
 
   return { data: D, MAT, SERIES, ROWS, similarDN, liningFor, dnList, rowsForDN, suit, filterRows,
-    matchCouplings, twoPipe, coverage, round };
+    matchCouplings, twoPipe, coverage, round, UK_COMMON_DEFAULT, ukCommonGet, ukCommonSet, hiddenNonUk };
 })();
 
 if (typeof module !== 'undefined') module.exports = { PipeLogic };
