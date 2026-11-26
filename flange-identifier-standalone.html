@@ -1,0 +1,2379 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flange Identifier</title>
+<!-- Web-app (PWA) bits: lets a hosted copy be installed with "Add to Home screen". -->
+<meta name="theme-color" content="#0b5cad">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Flange ID">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<!--
+  Flange Identifier — index.html
+  ---------------------------------------------------------------
+  This file is the screen: layout (HTML), looks (CSS) and the code that
+  reads the inputs and draws the results (JavaScript at the bottom).
+  The flange numbers live in flange-data.js and the matching maths in
+  flange-logic.js, loaded just below.
+-->
+<style>
+  /* ---------- colours and basic page style ---------- */
+  :root {
+    --bg: #f3f5f8; --card: #fff; --ink: #1d2733; --muted: #5d6b7a; --line: #dde3ea;
+    --brand: #0b5cad; --good: #1a8a4a; --close: #c98a00; --bad: #c0392b; --flag: #a05a00;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }   /* "hidden" must win over display:grid etc. */
+  body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: var(--brand); color: #fff; padding: 14px 16px; }
+  header h1 { margin: 0; font-size: 1.3rem; }
+  header p { margin: 2px 0 0; opacity: .85; font-size: .9rem; }
+  main { max-width: 1100px; margin: 0 auto; padding: 12px; display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { main { grid-template-columns: 380px 1fr; align-items: start; } #inputs { position: sticky; top: 12px; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  h2 { font-size: 1.05rem; margin: 0 0 10px; }
+
+  /* ---------- the input form ---------- */
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-weight: 600; font-size: .9rem; }
+  .field .hint { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+  .field input, .field select { width: 100%; padding: 9px 10px; font-size: 1rem; border: 1px solid #b9c3cf; border-radius: 7px; background: #fff; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .derived { font-size: .82rem; color: var(--brand); margin-top: 3px; min-height: 1em; }
+  .seg { display: flex; border: 1px solid #b9c3cf; border-radius: 7px; overflow: hidden; }
+  .seg button { flex: 1; padding: 8px; border: 0; background: #fff; font-size: .9rem; cursor: pointer; }
+  .seg button.on { background: var(--brand); color: #fff; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .9rem; }
+  .field label.inline, .checks label { display: inline-flex; align-items: center; gap: 5px; font-weight: 400; }
+  .field input[type=checkbox] { width: auto; margin: 0; }
+  main > * { min-width: 0; }   /* stops long text pushing the page wider than a phone screen */
+  .btns { display: flex; gap: 8px; margin-top: 6px; }
+  .btns button { flex: 1; padding: 10px; border-radius: 7px; border: 1px solid var(--brand); background: #fff; color: var(--brand); font-size: .95rem; cursor: pointer; }
+  details.more summary { cursor: pointer; color: var(--brand); font-size: .9rem; margin: 6px 0; }
+
+  /* ---------- result cards ---------- */
+  .result { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #fff; }
+  .result.top { border: 2px solid var(--good); }
+  .rhead { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .rtitle { font-weight: 700; font-size: 1.05rem; }
+  .rsub { color: var(--muted); font-size: .85rem; }
+  .score { font-weight: 700; white-space: nowrap; }
+  .bar { height: 6px; background: #e8edf2; border-radius: 3px; margin: 6px 0 8px; overflow: hidden; }
+  .bar span { display: block; height: 100%; }
+  ul.why { list-style: none; padding: 0; margin: 6px 0; font-size: .86rem; }
+  ul.why li { padding: 2px 0 2px 22px; position: relative; }
+  ul.why li::before { position: absolute; left: 2px; font-weight: 700; }
+  li.good::before { content: "✓"; color: var(--good); }
+  li.close::before { content: "~"; color: var(--close); }
+  li.bad::before { content: "✗"; color: var(--bad); }
+  li.na::before { content: "–"; color: var(--muted); }
+  table.spec { width: 100%; border-collapse: collapse; font-size: .88rem; margin-top: 6px; }
+  table.spec th { text-align: left; font-weight: 600; color: var(--muted); width: 42%; padding: 4px 6px 4px 0; vertical-align: top; }
+  table.spec td { padding: 4px 0; border-bottom: 1px solid #f0f2f5; }
+  .note { font-size: .82rem; color: var(--muted); margin: 4px 0; }
+  .twin { background: #eef6ff; border-left: 4px solid var(--brand); padding: 8px 10px; font-size: .86rem; margin: 8px 0; border-radius: 4px; }
+  .flag { background: #fff6e8; border-left: 4px solid var(--flag); padding: 6px 10px; font-size: .82rem; margin: 6px 0; border-radius: 4px; }
+  .pill { display: inline-block; font-size: .75rem; padding: 1px 7px; border-radius: 10px; background: #e8edf2; margin-right: 4px; }
+  .empty { color: var(--muted); text-align: center; padding: 30px 10px; }
+
+  /* ---------- browse tables ---------- */
+  .scroll { overflow-x: auto; }
+  table.data { border-collapse: collapse; font-size: .8rem; width: 100%; }
+  table.data th, table.data td { border: 1px solid var(--line); padding: 3px 6px; text-align: right; white-space: nowrap; }
+  table.data th { background: #f0f3f7; }
+  /* ---------- the drawing ---------- */
+  #drawing svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+  .drawbtns { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .drawbtn { font-size: .8rem; padding: 5px 9px; border-radius: 14px; border: 1px solid var(--brand); background: #fff; color: var(--brand); cursor: pointer; }
+  .drawbtn.on { background: var(--brand); color: #fff; }
+  /* ---------- mode tabs (Identify / Browse standards) ---------- */
+  .modes { max-width: 1100px; margin: 12px auto 0; padding: 0 12px; }
+  .modes .seg { background: #fff; }
+  .modes .seg button { padding: 10px; font-weight: 600; font-size: .95rem; }
+
+  /* ---------- browse mode ---------- */
+  .stepper { display: grid; grid-template-columns: 48px 1fr 48px; gap: 6px; }
+  .stepper button { font-size: 1.2rem; border: 1px solid var(--brand); background: #fff; color: var(--brand); border-radius: 7px; cursor: pointer; }
+  .stepper button:disabled { opacity: .35; cursor: default; }
+  #bRange { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+  table.range { font-size: .78rem; }
+  table.range th { position: sticky; top: 0; z-index: 1; }
+  table.range td small { display: block; color: var(--muted); font-size: .68rem; }
+  table.range tbody tr { cursor: pointer; }
+  table.range tbody tr:hover { background: #f5f8fc; }
+  @media (max-width: 480px) { table.range th, table.range td { padding: 3px 4px; } }
+  table.range tr.sel td { background: #dcebff; font-weight: 700; }
+  table.cmp { font-size: .82rem; }
+  table.cmp th:first-child { text-align: left; }
+  table.cmp td, table.cmp th { white-space: normal; }
+  table.cmp tr.diff td { background: #fff1d6; font-weight: 700; }
+  .vgood, .vbad { padding: 7px 10px; border-radius: 6px; font-size: .88rem; font-weight: 600; margin-bottom: 8px; }
+  .vgood { background: #e5f5ec; color: var(--good); }
+  .vbad { background: #fdecea; color: var(--bad); }
+  #bDrawing svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+  .flag .drawbtns, .twin .drawbtns { margin-bottom: 0; }
+  footer { max-width: 1100px; margin: 0 auto; padding: 8px 14px 30px; font-size: .78rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Flange Identifier</h1>
+  <p>Enter what you can measure on site — get the likely standard, DN and PN.</p>
+</header>
+
+<!-- Two modes: identify a flange from site measurements, or browse the standards. -->
+<nav class="modes">
+  <div class="seg" id="modeSeg">
+    <button type="button" data-mode="identify" class="on">🔍 Identify</button>
+    <button type="button" data-mode="browse">📖 Browse standards</button>
+  </div>
+</nav>
+
+<main id="identifyMain">
+  <!-- ================= INPUTS ================= -->
+  <section class="card" id="inputs">
+    <h2>Site measurements</h2>
+
+    <div class="field">
+      <label>Units you measured in</label>
+      <div class="seg" id="unitSeg">
+        <button type="button" data-unit="mm" class="on">mm</button>
+        <button type="button" data-unit="in">inches</button>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="od">Flange outside Ø</label>
+        <input id="od" type="number" inputmode="decimal" step="any" placeholder="e.g. 220">
+      </div>
+      <div class="field">
+        <label for="n">Number of bolts</label>
+        <input id="n" type="number" inputmode="numeric" step="1" min="3" placeholder="e.g. 8">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="chord">Distance between adjacent bolt centres</label>
+      <input id="chord" type="number" inputmode="decimal" step="any" placeholder="e.g. 68.9">
+      <div class="hint">Measure from the left edge of one hole to the left edge of the next hole — that equals centre-to-centre.</div>
+      <div class="derived" id="chordOut"></div>
+    </div>
+
+    <div class="field">
+      <label for="pcd">PCD (if you measured it directly)</label>
+      <input id="pcd" type="number" inputmode="decimal" step="any" placeholder="e.g. 180">
+      <div class="hint">With an even number of bolts: left edge of one hole to the left edge of the hole directly opposite.</div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="hole">Bolt hole Ø</label>
+        <input id="hole" type="number" inputmode="decimal" step="any" placeholder="e.g. 18">
+      </div>
+      <div class="field">
+        <label for="bolt">Bolt size</label>
+        <select id="bolt">
+          <option value="">– not known –</option>
+          <optgroup label="Metric">
+            <option>M10</option><option>M12</option><option>M16</option><option>M20</option><option>M22</option>
+            <option>M24</option><option>M27</option><option>M30</option><option>M33</option><option>M36</option>
+            <option>M39</option><option>M45</option><option>M52</option><option>M56</option>
+          </optgroup>
+          <optgroup label="Imperial">
+            <option>1/2"</option><option>5/8"</option><option>3/4"</option><option>7/8"</option><option>1"</option>
+            <option>1 1/8"</option><option>1 1/4"</option><option>1 1/2"</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="thk">Flange thickness</label>
+      <input id="thk" type="number" inputmode="decimal" step="any" placeholder="e.g. 20">
+      <div class="hint">Weak clue only — varies with flange type, material, corrosion and paint.</div>
+    </div>
+
+    <details class="more">
+      <summary>More measurements (optional)</summary>
+      <div class="row2">
+        <div class="field">
+          <label for="rf">Raised face Ø</label>
+          <input id="rf" type="number" inputmode="decimal" step="any">
+        </div>
+        <div class="field">
+          <label for="pipe">Pipe outside Ø</label>
+          <input id="pipe" type="number" inputmode="decimal" step="any">
+          <div class="hint">Steel DN100 = 114.3, ductile DN100 = 118</div>
+        </div>
+      </div>
+    </details>
+
+    <div class="field">
+      <label>Measurement tolerance</label>
+      <div class="seg" id="tolSeg">
+        <button type="button" data-tol="0.6">Tight</button>
+        <button type="button" data-tol="1" class="on">Normal</button>
+        <button type="button" data-tol="1.6">Loose</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Standards to search</label>
+      <div class="checks" id="famChecks"></div>
+    </div>
+
+    <div class="field">
+      <label class="inline"><input type="checkbox" id="showInch"> Also show inch values for metric flanges</label>
+    </div>
+
+    <div class="btns">
+      <button type="button" id="exampleBtn">Example</button>
+      <button type="button" id="clearBtn">Clear</button>
+    </div>
+  </section>
+
+  <!-- ================= RESULTS ================= -->
+  <section>
+    <div class="card" id="drawingCard" hidden>
+      <h2>Drawing <span class="rsub" id="drawingWhich"></span></h2>
+      <div id="drawing"></div>
+      <div class="note">Tap “Draw” on any result below to draw that flange instead.</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h2>Likely flanges</h2>
+      <div id="results"><div class="empty">Start typing measurements — results update as you go.<br>OD + number of bolts + bolt spacing is usually enough.</div></div>
+    </div>
+
+    <p class="note" style="text-align:center">Want to look up a size instead? Use <b>📖 Browse standards</b> at the top.</p>
+  </section>
+</main>
+
+<!-- ================= BROWSE STANDARDS (flange-browse.js) ================= -->
+<main id="browseMain" hidden>
+  <section>
+    <div class="card">
+      <h2>Browse standards</h2>
+      <div class="drawbtns" id="bQuick"></div>
+      <div class="field">
+        <label for="bStd">Standard / rating</label>
+        <select id="bStd"></select>
+      </div>
+      <div class="field">
+        <label for="bSize">Size</label>
+        <div class="stepper">
+          <button type="button" id="bPrev" aria-label="Previous size">‹</button>
+          <select id="bSize"></select>
+          <button type="button" id="bNext" aria-label="Next size">›</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="inline"><input type="checkbox" id="bShowInch"> Also show inch values for metric flanges</label>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px" id="bDetails"></div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Drawing</h2>
+      <div id="bDrawing"></div>
+    </div>
+    <div class="card" style="margin-top:12px" id="cCard">
+      <h2>Compare with</h2>
+      <div class="row2">
+        <div class="field"><select id="cStd" aria-label="Compare with standard"></select></div>
+        <div class="field"><select id="cSize" aria-label="Compare with size" hidden></select></div>
+      </div>
+      <div id="cOut"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2 id="bRangeTitle">All sizes</h2>
+      <div class="note">Tap a row to select it. Chord = adjacent bolt centres. Thk = thickest listed type. ⚠ = not cross-checked.</div>
+      <div id="bRange"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  For guidance only. Values are from the standards listed in each table's sources (see README.md); rows marked ⚠ could not be
+  cross-checked against a second source. Always confirm against the current standard, the manufacturer's drawing or the asset
+  record before ordering parts or working on pressurised plant.
+</footer>
+
+<script>
+/* =====================================================================
+ * flange-data.js  —  THE FLANGE DIMENSION TABLES
+ * ---------------------------------------------------------------------
+ * This file is pure data. The app logic lives in flange-logic.js.
+ *
+ * HOW THE DATA IS LAID OUT
+ * Each entry in FLANGE_TABLES is one "table" = one standard + one
+ * pressure rating, e.g. "EN 1092-1 PN16".  Each table has:
+ *
+ *   id         unique short name (no spaces)
+ *   family     the standard, e.g. 'EN 1092-1'
+ *   rating     'PN16', 'Table D', 'Class 150' ...
+ *   material   what it is normally made from (steel, ductile iron ...)
+ *   unit       'mm' or 'in' — the unit the numbers in `rows` are typed in.
+ *              Inch tables are converted to mm by flange-logic.js, so
+ *              you can copy numbers straight out of an imperial table.
+ *   aliases    other names people use for the same drilling
+ *   columns    the name of each value in a row (same order as the row)
+ *   thicknessLabels  what each thickness column (t1, t2, t3) means
+ *   rows       one array per size, in the order given by `columns`
+ *   altBoltCount  { size: [other allowed bolt counts] }
+ *   altOD      { size: other allowed outside diameter }
+ *   rowNotes   { size: 'text shown with that size' }
+ *   unverified { size: 'why this row could not be cross-checked' }
+ *   notes      general notes shown for every size in the table
+ *   sources    where the numbers came from
+ *
+ * COLUMN NAMES (not every table uses every column)
+ *   dn      nominal size, DN (mm). For inch tables this is the usual
+ *           metric equivalent, used only for display and sorting.
+ *   nps     nominal size in inches as text, e.g. '4' or '1 1/2'
+ *   od      flange outside diameter              (EN letter D)
+ *   pcd     pitch circle / bolt circle diameter  (EN letter K)
+ *   n       number of bolts
+ *   hole    bolt hole diameter                   (EN letter L)
+ *   bolt    bolt size as text: 'M16' or '5/8"'
+ *   t1,t2,t3 flange thickness for different flange types (see
+ *           thicknessLabels). null = not given by the standard.
+ *   rf      raised face diameter                 (EN letter d1)
+ *   pipeOD  outside diameter of the matching pipe (A for steel,
+ *           DE for ductile iron)
+ *
+ * TO ADD A NEW STANDARD: copy one whole table object, give it a new
+ * id, change the rows, and save. Nothing else needs changing — the
+ * matcher automatically searches every table in this list.
+ *
+ * null means "no value in the standard / not known". Never guess a
+ * number: leave it null and add a note instead.
+ * ===================================================================== */
+
+const FLANGE_TABLES = [
+
+  /* ------------------------------------------------------------------
+   * EN 1092-1:2018  STEEL FLANGES  (replaced BS 4504 and DIN 2501 etc.)
+   * D, K, L, n, bolt: EN 1092-1:2018 Tables 11-15, cross-checked against
+   *   Zickwolff (DN10-800) and S.K. Fitting Valve tables — 0 differences.
+   * Thickness t1/t2/t3 and d1 (rf): read from EN 1092-1:2018 Tables 8, 11-15.
+   * pipeOD: column A of the same tables.
+   * ------------------------------------------------------------------ */
+  {
+    id: 'EN1092-1_PN6', family: 'EN 1092-1', rating: 'PN6', material: 'Steel', unit: 'mm',
+    aliases: ['BS 4504 PN6', 'DIN PN6', 'BS EN 1092-1 PN6'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 't2', 't3', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Plate flange (type 01)', t2: 'Weld neck / hubbed (type 11/12/13)', t3: 'Blind (type 05)' },
+    rows: [
+      //  DN     D      K     n   L    bolt    t1    t2    t3    d1     A
+      [   15,    80,    55,   4,  11,  'M10',    12,   12,    12,    40,   21.3],
+      [   20,    90,    65,   4,  11,  'M10',    14,   14,    14,    50,   26.9],
+      [   25,   100,    75,   4,  11,  'M10',    14,   14,    14,    60,   33.7],
+      [   32,   120,    90,   4,  14,  'M12',    16,   14,    14,    70,   42.4],
+      [   40,   130,   100,   4,  14,  'M12',    16,   14,    14,    80,   48.3],
+      [   50,   140,   110,   4,  14,  'M12',    16,   14,    14,    90,   60.3],
+      [   65,   160,   130,   4,  14,  'M12',    16,   14,    14,   110,   76.1],
+      [   80,   190,   150,   4,  18,  'M16',    18,   16,    16,   128,   88.9],
+      [  100,   210,   170,   4,  18,  'M16',    18,   16,    16,   148,  114.3],
+      [  125,   240,   200,   8,  18,  'M16',    20,   18,    18,   178,  139.7],
+      [  150,   265,   225,   8,  18,  'M16',    20,   18,    18,   202,  168.3],
+      [  200,   320,   280,   8,  18,  'M16',    22,   20,    20,   258,  219.1],
+      [  250,   375,   335,  12,  18,  'M16',    24,   22,    22,   312,    273],
+      [  300,   440,   395,  12,  22,  'M20',    24,   22,    22,   365,  323.9],
+      [  350,   490,   445,  12,  22,  'M20',    26,   22,    22,   415,  355.6],
+      [  400,   540,   495,  16,  22,  'M20',    28,   22,    22,   465,  406.4],
+      [  450,   595,   550,  16,  22,  'M20',    30,   22,    24,   520,    457],
+      [  500,   645,   600,  20,  22,  'M20',    30,   24,    24,   570,    508],
+      [  600,   755,   705,  20,  26,  'M24',    32,   30,    30,   670,    610],
+      [  700,   860,   810,  24,  26,  'M24',    40,   30,    40,   775,    711],
+      [  800,   975,   920,  24,  30,  'M27',    44,   30,    44,   880,    813],
+      [  900,  1075,  1020,  24,  30,  'M27',    48,   34,    48,   980,    914],
+      [ 1000,  1175,  1120,  28,  30,  'M27',    52,   38,    52,  1080,   1016],
+      [ 1200,  1405,  1340,  32,  33,  'M30',    60,   42,    60,  1295,   1219],
+    ],
+    notes: ['PN6 is mainly used for low-pressure air, drainage and ventilation duty.'],
+    sources: ['EN 1092-1:2018 Table 11 & Table 8', 'zickwolff.de flange dimensions PN6', 'skfitting.com EN 1092-1 table'],
+  },
+  {
+    id: 'EN1092-1_PN10', family: 'EN 1092-1', rating: 'PN10', material: 'Steel', unit: 'mm',
+    aliases: ['BS 4504 PN10', 'DIN PN10', 'BS EN 1092-1 PN10'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 't2', 't3', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Plate flange (type 01)', t2: 'Weld neck / hubbed (type 11/12/13)', t3: 'Blind (type 05)' },
+    rows: [
+      //  DN     D      K     n   L    bolt    t1    t2    t3    d1     A
+      [   15,    95,    65,   4,  14,  'M12',    14,   16,    16,    45,   21.3],
+      [   20,   105,    75,   4,  14,  'M12',    16,   18,    18,    58,   26.9],
+      [   25,   115,    85,   4,  14,  'M12',    16,   18,    18,    68,   33.7],
+      [   32,   140,   100,   4,  18,  'M16',    18,   18,    18,    78,   42.4],
+      [   40,   150,   110,   4,  18,  'M16',    18,   18,    18,    88,   48.3],
+      [   50,   165,   125,   4,  18,  'M16',    20,   18,    18,   102,   60.3],
+      [   65,   185,   145,   8,  18,  'M16',    20,   18,    18,   122,   76.1],
+      [   80,   200,   160,   8,  18,  'M16',    20,   20,    20,   138,   88.9],
+      [  100,   220,   180,   8,  18,  'M16',    22,   20,    20,   158,  114.3],
+      [  125,   250,   210,   8,  18,  'M16',    22,   22,    22,   188,  139.7],
+      [  150,   285,   240,   8,  22,  'M20',    24,   22,    22,   212,  168.3],
+      [  200,   340,   295,   8,  22,  'M20',    24,   24,    24,   268,  219.1],
+      [  250,   395,   350,  12,  22,  'M20',    26,   26,    26,   320,    273],
+      [  300,   445,   400,  12,  22,  'M20',    26,   26,    26,   370,  323.9],
+      [  350,   505,   460,  16,  22,  'M20',    30,   26,    26,   430,  355.6],
+      [  400,   565,   515,  16,  26,  'M24',    32,   26,    26,   482,  406.4],
+      [  450,   615,   565,  20,  26,  'M24',    36,   28,    28,   532,    457],
+      [  500,   670,   620,  20,  26,  'M24',    38,   28,    28,   585,    508],
+      [  600,   780,   725,  20,  30,  'M27',    42,   30,    34,   685,    610],
+      [  700,   895,   840,  24,  30,  'M27',    50,   35,    38,   800,    711],
+      [  800,  1015,   950,  24,  33,  'M30',    56,   38,    48,   905,    813],
+      [  900,  1115,  1050,  28,  33,  'M30',    62,   38,    50,  1005,    914],
+      [ 1000,  1230,  1160,  28,  36,  'M33',    70,   44,    54,  1110,   1016],
+      [ 1200,  1455,  1380,  32,  39,  'M36',    83,   55,    66,  1330,   1219],
+      [ 1400,  1675,  1590,  36,  42,  'M39',  null,   65,  null,  1535,   1422],
+      [ 1600,  1915,  1820,  40,  48,  'M45',  null,   75,  null,  1760,   1626],
+      [ 1800,  2115,  2020,  44,  48,  'M45',  null,   85,  null,  1960,   1829],
+      [ 2000,  2325,  2230,  48,  48,  'M45',  null,   90,  null,  2170,   2032],
+    ],
+    altBoltCount: { 65: [4] },
+    rowNotes: { 65: 'EN 1092-1 lists 8 holes; 4 holes allowed by agreement to mate with cast iron (EN 1092-2) flanges.' },
+    notes: ['DN15 to DN150 PN10 has exactly the same drilling and outside diameter as PN16.'],
+    sources: ['EN 1092-1:2018 Table 12 & Table 8', 'zickwolff.de flange dimensions PN10', 'skfitting.com EN 1092-1 table'],
+  },
+  {
+    id: 'EN1092-1_PN16', family: 'EN 1092-1', rating: 'PN16', material: 'Steel', unit: 'mm',
+    aliases: ['BS 4504 PN16', 'DIN PN16', 'BS EN 1092-1 PN16'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 't2', 't3', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Plate flange (type 01)', t2: 'Weld neck / hubbed (type 11/12/13)', t3: 'Blind (type 05)' },
+    rows: [
+      //  DN     D      K     n   L    bolt    t1    t2    t3    d1     A
+      [   15,    95,    65,   4,  14,  'M12',    14,   16,    16,    45,   21.3],
+      [   20,   105,    75,   4,  14,  'M12',    16,   18,    18,    58,   26.9],
+      [   25,   115,    85,   4,  14,  'M12',    16,   18,    18,    68,   33.7],
+      [   32,   140,   100,   4,  18,  'M16',    18,   18,    18,    78,   42.4],
+      [   40,   150,   110,   4,  18,  'M16',    18,   18,    18,    88,   48.3],
+      [   50,   165,   125,   4,  18,  'M16',    20,   18,    18,   102,   60.3],
+      [   65,   185,   145,   8,  18,  'M16',    20,   18,    18,   122,   76.1],
+      [   80,   200,   160,   8,  18,  'M16',    20,   20,    20,   138,   88.9],
+      [  100,   220,   180,   8,  18,  'M16',    22,   20,    20,   158,  114.3],
+      [  125,   250,   210,   8,  18,  'M16',    22,   22,    22,   188,  139.7],
+      [  150,   285,   240,   8,  22,  'M20',    24,   22,    22,   212,  168.3],
+      [  200,   340,   295,  12,  22,  'M20',    26,   24,    24,   268,  219.1],
+      [  250,   405,   355,  12,  26,  'M24',    29,   26,    26,   320,    273],
+      [  300,   460,   410,  12,  26,  'M24',    32,   28,    28,   378,  323.9],
+      [  350,   520,   470,  16,  26,  'M24',    35,   30,    30,   438,  355.6],
+      [  400,   580,   525,  16,  30,  'M27',    38,   32,    32,   490,  406.4],
+      [  450,   640,   585,  20,  30,  'M27',    42,   34,    40,   550,    457],
+      [  500,   715,   650,  20,  33,  'M30',    46,   36,    44,   610,    508],
+      [  600,   840,   770,  20,  36,  'M33',    55,   40,    54,   725,    610],
+      [  700,   910,   840,  24,  36,  'M33',    63,   40,    58,   795,    711],
+      [  800,  1025,   950,  24,  39,  'M36',    74,   41,    62,   900,    813],
+      [  900,  1125,  1050,  28,  39,  'M36',    82,   48,    64,  1000,    914],
+      [ 1000,  1255,  1170,  28,  42,  'M39',    90,   59,    68,  1115,   1016],
+      [ 1200,  1485,  1390,  32,  48,  'M45',  null,   78,  null,  1330,   1219],
+      [ 1400,  1685,  1590,  36,  48,  'M45',  null,   84,  null,  1530,   1422],
+      [ 1600,  1930,  1820,  40,  56,  'M52',  null,  102,  null,  1750,   1626],
+      [ 1800,  2130,  2020,  44,  56,  'M52',  null,  110,  null,  1950,   1829],
+      [ 2000,  2345,  2230,  48,  62,  'M56',  null,  124,  null,  2150,   2032],
+    ],
+    altBoltCount: { 65: [4] },
+    rowNotes: { 65: 'EN 1092-1 lists 8 holes; 4 holes allowed by agreement to mate with cast iron (EN 1092-2) flanges.' },
+    notes: ['DN15 to DN150 PN16 has exactly the same drilling and outside diameter as PN10.'],
+    sources: ['EN 1092-1:2018 Table 13 & Table 8', 'zickwolff.de flange dimensions PN16', 'skfitting.com EN 1092-1 table', 'roymech.co.uk BS EN 1092-1 PN16'],
+  },
+  {
+    id: 'EN1092-1_PN25', family: 'EN 1092-1', rating: 'PN25', material: 'Steel', unit: 'mm',
+    aliases: ['BS 4504 PN25', 'DIN PN25', 'BS EN 1092-1 PN25'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 't2', 't3', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Plate flange (type 01)', t2: 'Weld neck / hubbed (type 11/12/13)', t3: 'Blind (type 05)' },
+    rows: [
+      //  DN     D      K     n   L    bolt    t1    t2    t3    d1     A
+      [   15,    95,    65,   4,  14,  'M12',    14,   16,    16,    45,   21.3],
+      [   20,   105,    75,   4,  14,  'M12',    16,   18,    18,    58,   26.9],
+      [   25,   115,    85,   4,  14,  'M12',    16,   18,    18,    68,   33.7],
+      [   32,   140,   100,   4,  18,  'M16',    18,   18,    18,    78,   42.4],
+      [   40,   150,   110,   4,  18,  'M16',    18,   18,    18,    88,   48.3],
+      [   50,   165,   125,   4,  18,  'M16',    20,   20,    20,   102,   60.3],
+      [   65,   185,   145,   8,  18,  'M16',    22,   22,    22,   122,   76.1],
+      [   80,   200,   160,   8,  18,  'M16',    24,   24,    24,   138,   88.9],
+      [  100,   235,   190,   8,  22,  'M20',    26,   24,    24,   162,  114.3],
+      [  125,   270,   220,   8,  26,  'M24',    28,   26,    26,   188,  139.7],
+      [  150,   300,   250,   8,  26,  'M24',    30,   28,    28,   218,  168.3],
+      [  200,   360,   310,  12,  26,  'M24',    32,   30,    30,   278,  219.1],
+      [  250,   425,   370,  12,  30,  'M27',    35,   32,    32,   335,    273],
+      [  300,   485,   430,  16,  30,  'M27',    38,   34,    34,   395,  323.9],
+      [  350,   555,   490,  16,  33,  'M30',    42,   38,    38,   450,  355.6],
+      [  400,   620,   550,  16,  36,  'M33',    48,   40,    40,   505,  406.4],
+      [  450,   670,   600,  20,  36,  'M33',    54,   46,    50,   555,    457],
+      [  500,   730,   660,  20,  36,  'M33',    58,   48,    51,   615,    508],
+      [  600,   845,   770,  20,  39,  'M36',    68,   48,    66,   720,    610],
+      [  700,   960,   875,  24,  42,  'M39',    85,   50,  null,   820,    711],
+      [  800,  1085,   990,  24,  48,  'M45',    95,   53,  null,   930,    813],
+      [  900,  1185,  1090,  28,  48,  'M45',  null,   57,  null,  1030,    914],
+      [ 1000,  1320,  1210,  28,  56,  'M52',  null,   63,  null,  1140,   1016],
+    ],
+    notes: ['DN15 to DN150 PN25 has the same drilling and outside diameter as PN40.'],
+    sources: ['EN 1092-1:2018 Table 14 & Table 8', 'zickwolff.de flange dimensions PN25', 'skfitting.com EN 1092-1 table'],
+  },
+  {
+    id: 'EN1092-1_PN40', family: 'EN 1092-1', rating: 'PN40', material: 'Steel', unit: 'mm',
+    aliases: ['BS 4504 PN40', 'DIN PN40', 'BS EN 1092-1 PN40'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 't2', 't3', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Plate flange (type 01)', t2: 'Weld neck / hubbed (type 11/12/13)', t3: 'Blind (type 05)' },
+    rows: [
+      //  DN     D      K     n   L    bolt    t1    t2    t3    d1     A
+      [   15,    95,    65,   4,  14,  'M12',    14,   16,    16,    45,   21.3],
+      [   20,   105,    75,   4,  14,  'M12',    16,   18,    18,    58,   26.9],
+      [   25,   115,    85,   4,  14,  'M12',    16,   18,    18,    68,   33.7],
+      [   32,   140,   100,   4,  18,  'M16',    18,   18,    18,    78,   42.4],
+      [   40,   150,   110,   4,  18,  'M16',    18,   18,    18,    88,   48.3],
+      [   50,   165,   125,   4,  18,  'M16',    20,   20,    20,   102,   60.3],
+      [   65,   185,   145,   8,  18,  'M16',    22,   22,    22,   122,   76.1],
+      [   80,   200,   160,   8,  18,  'M16',    24,   24,    24,   138,   88.9],
+      [  100,   235,   190,   8,  22,  'M20',    26,   24,    24,   162,  114.3],
+      [  125,   270,   220,   8,  26,  'M24',    28,   26,    26,   188,  139.7],
+      [  150,   300,   250,   8,  26,  'M24',    30,   28,    28,   218,  168.3],
+      [  200,   375,   320,  12,  30,  'M27',    36,   34,    36,   285,  219.1],
+      [  250,   450,   385,  12,  33,  'M30',    42,   38,    38,   345,    273],
+      [  300,   515,   450,  16,  33,  'M30',    52,   42,    42,   410,  323.9],
+      [  350,   580,   510,  16,  36,  'M33',    58,   46,    46,   465,  355.6],
+      [  400,   660,   585,  16,  39,  'M36',    65,   50,    50,   535,  406.4],
+      [  450,   685,   610,  20,  39,  'M36',  null,   57,    57,   560,    457],
+      [  500,   755,   670,  20,  42,  'M39',  null,   57,    57,   615,    508],
+      [  600,   890,   795,  20,  48,  'M45',  null,   72,    72,   735,    610],
+    ],
+    notes: ['DN15 to DN150 PN40 has the same drilling and outside diameter as PN25.'],
+    sources: ['EN 1092-1:2018 Table 15 & Table 8', 'zickwolff.de flange dimensions PN40', 'skfitting.com EN 1092-1 table'],
+  },
+
+  /* ------------------------------------------------------------------
+   * EN 1092-2  CAST IRON FLANGES (ductile / grey iron) — the usual UK
+   * water industry flange on DI pipe, fittings and valves.
+   * Source: BS EN 1092-2:1997 Tables 7-11 (D, K, L, n, bolt, DI
+   *   thickness C). DN50-600 cross-checked against TPMC Steel's EN 1092-2
+   *   tables (D, K, L, n, bolt, thickness all agree).
+   * Bolt holes are bigger than steel (19/23/28 ... mm instead of 18/22/26)
+   * but the PCD and outside diameter mate with EN 1092-1.
+   * t1 = ductile iron flange thickness (types 05/11/12/13/14/21).
+   * rf  = raised face diameter: EN 1092-2 uses the same d1 as EN 1092-1
+   *       (copied from EN 1092-1 Table 8 — flagged in notes).
+   * pipeOD = DE of ductile iron pipe, EN 545:2010 Table 16 (checked
+   *       against Electrosteel and APS Romania data sheets).
+   * The 2023 edition of EN 1092-2 exists; values here are from 1997 and
+   * are believed unchanged for mating dimensions — check if critical.
+   * ------------------------------------------------------------------ */
+  {
+    id: 'EN1092-2_PN6', family: 'EN 1092-2', rating: 'PN6', material: 'Cast iron (ductile / grey)', unit: 'mm',
+    aliases: ['BS 4504 PN6 (cast iron)', 'BS EN 1092-2 PN6'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Cast iron flange (first thickness column of the table)' },
+    rows: [
+      //  DN     D     K     n   L    bolt    t1   d1   DE
+      [   15,   80,   55,  4, 11, 'M10',   12,  40, null],
+      [   20,   90,   65,  4, 11, 'M10',   14,  50, null],
+      [   25,  100,   75,  4, 11, 'M10',   14,  60, null],
+      [   32,  120,   90,  4, 14, 'M12',   16,  70, null],
+      [   40,  130,  100,  4, 14, 'M12',   16,  80,   56],
+      [   50,  140,  110,  4, 14, 'M12',   16,  90,   66],
+      [   60,  150,  120,  4, 14, 'M12',   16, null,  77],
+      [   65,  160,  130,  4, 14, 'M12',   16, 110,   82],
+      [   80,  190,  150,  4, 19, 'M16',   18, 128,   98],
+      [  100,  210,  170,  4, 19, 'M16',   18, 148,  118],
+      [  125,  240,  200,  8, 19, 'M16',   20, 178,  144],
+      [  150,  265,  225,  8, 19, 'M16',   20, 202,  170],
+      [  200,  320,  280,  8, 19, 'M16',   22, 258,  222],
+      [  250,  375,  335, 12, 19, 'M16',   24, 312,  274],
+      [  300,  440,  395, 12, 23, 'M20',   24, 365,  326],
+      [  350,  490,  445, 12, 23, 'M20',   26, 415,  378],
+      [  400,  540,  495, 16, 23, 'M20',   28, 465,  429],
+      [  450,  595,  550, 16, 23, 'M20',   28, 520,  480],
+      [  500,  645,  600, 20, 23, 'M20',   30, 570,  532],
+      [  600,  755,  705, 20, 28, 'M24',   30, 670,  635],
+      [  700,  860,  810, 24, 28, 'M24',   32, 775,  738],
+      [  800,  975,  920, 24, 31, 'M27',   34, 880,  842],
+      [  900, 1075, 1020, 24, 31, 'M27',   36, 980,  945],
+      [ 1000, 1175, 1120, 28, 31, 'M27',   36, 1080, 1048],
+      [ 1200, 1405, 1340, 32, 34, 'M30',   40, 1295, 1255],
+    ],
+    unverified: {
+      _all: 'PN6 cast iron rows come from BS EN 1092-2:1997 only (no second source found). D, K, n and bolt agree with EN 1092-1 PN6; thickness column assignment (grey vs ductile iron) could not be confirmed.',
+    },
+    notes: ['PN6 cast iron flanges are uncommon in water supply; more likely on old low-pressure or drainage work.'],
+    sources: ['BS EN 1092-2:1997 Table 7', 'EN 545:2010 Table 16 (pipe DE)'],
+  },
+  {
+    id: 'EN1092-2_PN10', family: 'EN 1092-2', rating: 'PN10', material: 'Ductile iron', unit: 'mm',
+    aliases: ['BS 4504 PN10 (cast iron)', 'BS EN 1092-2 PN10', 'DI PN10'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Ductile iron flange' },
+    rows: [
+      //  DN     D     K     n   L    bolt    t1    d1    DE
+      [   40,  150,  110,  4, 19, 'M16',   19,    88,   56],
+      [   50,  165,  125,  4, 19, 'M16',   19,   102,   66],
+      [   60,  175,  135,  4, 19, 'M16',   19,  null,   77],
+      [   65,  185,  145,  4, 19, 'M16',   19,   122,   82],
+      [   80,  200,  160,  8, 19, 'M16',   19,   138,   98],
+      [  100,  220,  180,  8, 19, 'M16',   19,   158,  118],
+      [  125,  250,  210,  8, 19, 'M16',   19,   188,  144],
+      [  150,  285,  240,  8, 23, 'M20',   19,   212,  170],
+      [  200,  340,  295,  8, 23, 'M20',   20,   268,  222],
+      [  250,  395,  350, 12, 23, 'M20',   22,   320,  274],
+      [  300,  445,  400, 12, 23, 'M20', 24.5,   370,  326],
+      [  350,  505,  460, 16, 23, 'M20', 24.5,   430,  378],
+      [  400,  565,  515, 16, 28, 'M24', 24.5,   482,  429],
+      [  450,  615,  565, 20, 28, 'M24', 25.5,   532,  480],
+      [  500,  670,  620, 20, 28, 'M24', 26.5,   585,  532],
+      [  600,  780,  725, 20, 31, 'M27',   30,   685,  635],
+      [  700,  895,  840, 24, 31, 'M27', 32.5,   800,  738],
+      [  800, 1015,  950, 24, 34, 'M30',   35,   905,  842],
+      [  900, 1115, 1050, 28, 34, 'M30', 37.5,  1005,  945],
+      [ 1000, 1230, 1160, 28, 37, 'M33',   40,  1110, 1048],
+      [ 1100, 1340, 1270, 32, 37, 'M33', 42.5,  null, 1152],
+      [ 1200, 1455, 1380, 32, 41, 'M36',   45,  1330, 1255],
+      [ 1400, 1675, 1590, 36, 44, 'M39',   46,  1535, 1462],
+      [ 1500, 1785, 1700, 36, 44, 'M39', 47.5,  null, 1565],
+      [ 1600, 1915, 1820, 40, 50, 'M45',   49,  1760, 1668],
+      [ 1800, 2115, 2020, 44, 50, 'M45',   52,  1960, 1875],
+      [ 2000, 2325, 2230, 48, 50, 'M45',   55,  2170, 2082],
+    ],
+    altBoltCount: { 65: [8] },
+    altOD: { 250: 400, 300: 455 },
+    rowNotes: {
+      65: 'EN 1092-2:1997 lists 4 holes for DN65; steel EN 1092-1 lists 8 (4 by agreement). Either may be found.',
+      250: 'Ductile iron pipes and fittings use D = 400 mm at DN250 (table value 395 mm for other cast irons).',
+      300: 'Ductile iron pipes and fittings use D = 455 mm at DN300 (table value 445 mm for other cast irons).',
+    },
+    unverified: {
+      700: 'DN700+ from BS EN 1092-2:1997 only; second-source check covered DN50-600.',
+      800: 'From BS EN 1092-2:1997 only.', 900: 'From BS EN 1092-2:1997 only.', 1000: 'From BS EN 1092-2:1997 only.',
+      1100: 'From BS EN 1092-2:1997 only.', 1200: 'From BS EN 1092-2:1997 only.', 1400: 'From BS EN 1092-2:1997 only.',
+      1500: 'From BS EN 1092-2:1997 only.', 1600: 'From BS EN 1092-2:1997 only.', 1800: 'From BS EN 1092-2:1997 only.',
+      2000: 'From BS EN 1092-2:1997 only.', 60: 'DN60 is a cast-iron-only size; from BS EN 1092-2:1997 only.',
+    },
+    notes: [
+      'DN40 to DN150: EN 1092-2 says "use PN16 dimensions" — PN10 and PN16 iron flanges are identical in this range, including thickness.',
+      'Raised face diameter copied from EN 1092-1 Table 8 (EN 1092-2 uses the same facing dimensions). Many iron flanges are flat-faced with a full-face gasket.',
+      'PN10 ductile iron flanges may be used on socket pipelines up to about 15 bar (EN 1092-2 note).',
+    ],
+    sources: ['BS EN 1092-2:1997 Table 8', 'tpmcsteel.com EN 1092-2 PN10/16/25 tables', 'EN 545:2010 Table 16 (pipe DE)'],
+  },
+  {
+    id: 'EN1092-2_PN16', family: 'EN 1092-2', rating: 'PN16', material: 'Ductile iron', unit: 'mm',
+    aliases: ['BS 4504 PN16 (cast iron)', 'BS EN 1092-2 PN16', 'DI PN16'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Ductile iron flange' },
+    rows: [
+      //  DN     D     K     n   L    bolt    t1    d1    DE
+      [   40,  150,  110,  4, 19, 'M16',   19,    88,   56],
+      [   50,  165,  125,  4, 19, 'M16',   19,   102,   66],
+      [   60,  175,  135,  4, 19, 'M16',   19,  null,   77],
+      [   65,  185,  145,  4, 19, 'M16',   19,   122,   82],
+      [   80,  200,  160,  8, 19, 'M16',   19,   138,   98],
+      [  100,  220,  180,  8, 19, 'M16',   19,   158,  118],
+      [  125,  250,  210,  8, 19, 'M16',   19,   188,  144],
+      [  150,  285,  240,  8, 23, 'M20',   19,   212,  170],
+      [  200,  340,  295, 12, 23, 'M20',   20,   268,  222],
+      [  250,  405,  355, 12, 28, 'M24',   22,   320,  274],
+      [  300,  460,  410, 12, 28, 'M24', 24.5,   378,  326],
+      [  350,  520,  470, 16, 28, 'M24', 26.5,   438,  378],
+      [  400,  580,  525, 16, 31, 'M27',   28,   490,  429],
+      [  450,  640,  585, 20, 31, 'M27',   30,   550,  480],
+      [  500,  715,  650, 20, 34, 'M30', 31.5,   610,  532],
+      [  600,  840,  770, 20, 37, 'M33',   36,   725,  635],
+      [  700,  910,  840, 24, 37, 'M33', 39.5,   795,  738],
+      [  800, 1025,  950, 24, 41, 'M36',   43,   900,  842],
+      [  900, 1125, 1050, 28, 41, 'M36', 46.5,  1000,  945],
+      [ 1000, 1255, 1170, 28, 44, 'M39',   50,  1115, 1048],
+      [ 1100, 1355, 1270, 32, 44, 'M39', 53.5,  null, 1152],
+      [ 1200, 1485, 1390, 32, 50, 'M45',   57,  1330, 1255],
+      [ 1400, 1685, 1590, 36, 50, 'M45',   60,  1530, 1462],
+      [ 1500, 1820, 1710, 36, 57, 'M52', 62.5,  null, 1565],
+      [ 1600, 1930, 1820, 40, 57, 'M52',   65,  1750, 1668],
+      [ 1800, 2130, 2020, 44, 57, 'M52',   70,  1950, 1875],
+      [ 2000, 2345, 2230, 48, 62, 'M56',   75,  2150, 2082],
+    ],
+    altBoltCount: { 65: [8] },
+    altOD: { 250: 400, 300: 455 },
+    rowNotes: {
+      65: 'EN 1092-2:1997 lists 4 holes for DN65; steel EN 1092-1 lists 8 (4 by agreement). Either may be found.',
+      250: 'Ductile iron pipes and fittings use D = 400 mm at DN250 (table value 405 mm for other cast irons).',
+      300: 'Ductile iron pipes and fittings use D = 455 mm at DN300 (table value 460 mm for other cast irons).',
+    },
+    unverified: {
+      700: 'DN700+ from BS EN 1092-2:1997 only (D, K, n, bolt agree with EN 1092-1 PN16).',
+      800: 'From BS EN 1092-2:1997 only.', 900: 'From BS EN 1092-2:1997 only.', 1000: 'From BS EN 1092-2:1997 only.',
+      1100: 'From BS EN 1092-2:1997 only.', 1200: 'From BS EN 1092-2:1997 only.', 1400: 'From BS EN 1092-2:1997 only.',
+      1500: 'From BS EN 1092-2:1997 only.', 1600: 'From BS EN 1092-2:1997 only.', 1800: 'From BS EN 1092-2:1997 only.',
+      2000: 'From BS EN 1092-2:1997 only.', 60: 'DN60 is a cast-iron-only size; from BS EN 1092-2:1997 only.',
+    },
+    notes: [
+      'DN40 to DN50: EN 1092-2 says "use PN40 dimensions".',
+      'Raised face diameter copied from EN 1092-1 Table 8 (EN 1092-2 uses the same facing dimensions). Many iron flanges are flat-faced with a full-face gasket.',
+    ],
+    sources: ['BS EN 1092-2:1997 Table 9', 'tpmcsteel.com EN 1092-2 PN10/16/25 tables', 'EN 545:2010 Table 16 (pipe DE)'],
+  },
+  {
+    id: 'EN1092-2_PN25', family: 'EN 1092-2', rating: 'PN25', material: 'Ductile iron', unit: 'mm',
+    aliases: ['BS 4504 PN25 (cast iron)', 'BS EN 1092-2 PN25', 'DI PN25'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Ductile iron flange' },
+    rows: [
+      //  DN     D     K     n   L    bolt    t1    d1    DE
+      [   40,  150,  110,  4, 19, 'M16',   19,    88,   56],
+      [   50,  165,  125,  4, 19, 'M16',   19,   102,   66],
+      [   65,  185,  145,  8, 19, 'M16',   19,   122,   82],
+      [   80,  200,  160,  8, 19, 'M16',   19,   138,   98],
+      [  100,  235,  190,  8, 23, 'M20',   19,   162,  118],
+      [  125,  270,  220,  8, 28, 'M24',   19,   188,  144],
+      [  150,  300,  250,  8, 28, 'M24',   20,   218,  170],
+      [  200,  360,  310, 12, 28, 'M24',   22,   278,  222],
+      [  250,  425,  370, 12, 31, 'M27', 24.5,   335,  274],
+      [  300,  485,  430, 16, 31, 'M27', 27.5,   395,  326],
+      [  350,  555,  490, 16, 34, 'M30',   30,   450,  378],
+      [  400,  620,  550, 16, 37, 'M33',   32,   505,  429],
+      [  450,  670,  600, 20, 37, 'M33', 34.5,   555,  480],
+      [  500,  730,  660, 20, 37, 'M33', 36.5,   615,  532],
+      [  600,  845,  770, 20, 41, 'M36',   42,   720,  635],
+      [  700,  960,  875, 24, 44, 'M39', 46.5,   820,  738],
+      [  800, 1085,  990, 24, 50, 'M45',   51,   930,  842],
+      [  900, 1185, 1090, 28, 50, 'M45', 55.5,  1030,  945],
+      [ 1000, 1320, 1210, 28, 57, 'M52',   60,  1140, 1048],
+    ],
+    unverified: {
+      700: 'From BS EN 1092-2:1997 only (D, K, n, bolt agree with EN 1092-1 PN25).',
+      800: 'From BS EN 1092-2:1997 only.', 900: 'From BS EN 1092-2:1997 only.', 1000: 'From BS EN 1092-2:1997 only.',
+    },
+    notes: ['DN40 to DN100: EN 1092-2 says "use PN40 dimensions" — PN25 and PN40 iron flanges are identical in this range.'],
+    sources: ['BS EN 1092-2:1997 Table 10', 'tpmcsteel.com EN 1092-2 PN25 table', 'EN 545:2010 Table 16 (pipe DE)'],
+  },
+  {
+    id: 'EN1092-2_PN40', family: 'EN 1092-2', rating: 'PN40', material: 'Ductile iron', unit: 'mm',
+    aliases: ['BS 4504 PN40 (cast iron)', 'BS EN 1092-2 PN40', 'DI PN40'],
+    columns: ['dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Ductile iron flange' },
+    rows: [
+      //  DN     D     K     n   L    bolt    t1    d1    DE
+      [   40,  150,  110,  4, 19, 'M16',   19,    88,   56],
+      [   50,  165,  125,  4, 19, 'M16',   19,   102,   66],
+      [   60,  175,  135,  8, 19, 'M16',   19,  null,   77],
+      [   65,  185,  145,  8, 19, 'M16',   19,   122,   82],
+      [   80,  200,  160,  8, 19, 'M16',   19,   138,   98],
+      [  100,  235,  190,  8, 23, 'M20',   19,   162,  118],
+      [  125,  270,  220,  8, 28, 'M24', 23.5,   188,  144],
+      [  150,  300,  250,  8, 28, 'M24',   26,   218,  170],
+      [  200,  375,  320, 12, 31, 'M27',   30,   285,  222],
+      [  250,  450,  385, 12, 34, 'M30', 34.5,   345,  274],
+      [  300,  515,  450, 16, 34, 'M30', 39.5,   410,  326],
+      [  350,  580,  510, 16, 37, 'M33',   44,   465,  378],
+      [  400,  660,  585, 16, 41, 'M36',   48,   535,  429],
+      [  450,  685,  610, 20, 41, 'M36',   49,   560,  480],
+      [  500,  755,  670, 20, 44, 'M39',   52,   615,  532],
+      [  600,  890,  795, 20, 50, 'M45',   58,   735,  635],
+    ],
+    unverified: {
+      _all: 'PN40 iron D, K, n and bolt agree with EN 1092-1 PN40 (two sources). Iron hole sizes and thicknesses are from BS EN 1092-2:1997 only.',
+      60: 'DN60 is a cast-iron-only size; from BS EN 1092-2:1997 only.',
+    },
+    notes: [],
+    sources: ['BS EN 1092-2:1997 Table 11', 'EN 545:2010 Table 16 (pipe DE)'],
+  },
+
+  /* ------------------------------------------------------------------
+   * BS 10:1962  (withdrawn, but still everywhere on older UK plant)
+   * Numbers are in INCHES, typed straight from the BS 10 tables.
+   * Source 1: BS 10:1962 Table D/E/F reproduced by Evenort Ltd (Hilton
+   *   Metal Forgings) — D, K, L, C, number of holes.
+   * Source 2: Inflow UK "Flange Table - BS10" (D, C, K, holes, bolt).
+   * Both agree except where flagged. A third source (Complete Stainless)
+   * disagrees on some bolt counts — see `unverified`.
+   * Bolt size is the bolt that suits the hole: 9/16" hole -> 1/2" bolt,
+   * 11/16" -> 5/8", 7/8" -> 3/4", 1" -> 7/8", 1 1/8" -> 1",
+   * 1 1/4" -> 1 1/8", 1 3/8" -> 1 1/4".
+   * t1 = thickness of a STEEL plate (slip-on) flange. Cast iron BS 10
+   * flanges are thicker — use thickness as a weak clue only.
+   * pipeOD = column A (steel pipe OD, inches).
+   * ------------------------------------------------------------------ */
+  {
+    id: 'BS10_D', family: 'BS 10', rating: 'Table D', material: 'Steel / cast iron (pre-metric UK)', unit: 'in',
+    aliases: ['BS10 Table D', 'BS 10 D'],
+    columns: ['nps', 'dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'pipeOD'],
+    thicknessLabels: { t1: 'Steel plate flange' },
+    rows: [
+      // NPS       DN    D       K       n   L        bolt     C        A
+      ['1/2',     15,  3.75,   2.625,   4, 0.5625, '1/2"',  0.1875,  0.84],
+      ['3/4',     20,  4,      2.875,   4, 0.5625, '1/2"',  0.1875,  1.05],
+      ['1',       25,  4.5,    3.25,    4, 0.5625, '1/2"',  0.1875,  1.32],
+      ['1 1/4',   32,  4.75,   3.4375,  4, 0.5625, '1/2"',  0.25,    1.66],
+      ['1 1/2',   40,  5.25,   3.875,   4, 0.5625, '1/2"',  0.25,    1.9],
+      ['2',       50,  6,      4.5,     4, 0.6875, '5/8"',  0.3125,  2.38],
+      ['2 1/2',   65,  6.5,    5,       4, 0.6875, '5/8"',  0.3125,  2.88],
+      ['3',       80,  7.25,   5.75,    4, 0.6875, '5/8"',  0.375,   3.5],
+      ['3 1/2',   90,  8,      6.5,     4, 0.6875, '5/8"',  0.375,   4.0],
+      ['4',      100,  8.5,    7,       4, 0.6875, '5/8"',  0.375,   4.5],
+      ['5',      125,  10,     8.25,    8, 0.6875, '5/8"',  0.5,     5.56],
+      ['6',      150,  11,     9.25,    8, 0.6875, '5/8"',  0.5,     6.63],
+      ['7',      175,  12,     10.25,   8, 0.6875, '5/8"',  0.5,     null],
+      ['8',      200,  13.25,  11.5,    8, 0.6875, '5/8"',  0.5,     8.63],
+      ['9',      225,  14.5,   12.75,   8, 0.6875, '5/8"',  0.625,   null],
+      ['10',     250,  16,     14,      8, 0.875,  '3/4"',  0.625,  10.75],
+      ['12',     300,  18,     16,     12, 0.875,  '3/4"',  0.75,   12.75],
+      ['14',     350,  20.75,  18.5,   12, 1,      '7/8"',  0.875,  14],
+      ['15',     375,  21.75,  19.5,   12, 1,      '7/8"',  0.875,  null],
+      ['16',     400,  22.75,  20.5,   12, 1,      '7/8"',  0.875,  16],
+      ['18',     450,  25.25,  23,     12, 1,      '7/8"',  1,      18],
+      ['20',     500,  27.75,  25.25,  16, 1,      '7/8"',  1.125,  20],
+      ['24',     600,  32.5,   29.75,  16, 1.125,  '1"',    1.25,   24],
+    ],
+    unverified: {
+      175: '7" is only in the Inflow UK table (not in the Evenort BS 10 extract). Hole size assumed 11/16" from the M16 bolt listed.',
+      225: '9" is only in the Inflow UK table. Hole size assumed 11/16" from the M16 bolt listed.',
+      375: '15" is only in the Inflow UK table. Hole size assumed 1" from the M22 bolt listed.',
+      90:  '3 1/2" is only in the Evenort BS 10 extract.',
+      100: 'Two sources give 4 bolts at 4" (Evenort, Inflow UK); a third (Complete Stainless) says 8.',
+      250: 'Two sources give 8 bolts at 10" (Evenort, Inflow UK); a third (Complete Stainless) says 12.',
+      450: 'Two sources give 12 bolts at 18" (Evenort, Inflow UK); a third (Complete Stainless) says 16.',
+    },
+    notes: [
+      'Table D was the most common low-pressure BS 10 drilling (roughly 7 bar water).',
+      'Table D and Table E have the same outside diameter and PCD at every size — they differ only in thickness, and at some sizes in bolt count / bolt size.',
+      'BS 10 flanges are often flat-faced; no raised face diameter is given.',
+    ],
+    sources: ['BS 10:1962 (Evenort Ltd reproduction)', 'inflowuk.co.uk Flange Table - BS10', 'completestainless.co.uk quick flange table (third check)'],
+  },
+  {
+    id: 'BS10_E', family: 'BS 10', rating: 'Table E', material: 'Steel / cast iron (pre-metric UK)', unit: 'in',
+    aliases: ['BS10 Table E', 'BS 10 E'],
+    columns: ['nps', 'dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'pipeOD'],
+    thicknessLabels: { t1: 'Steel plate flange' },
+    rows: [
+      // NPS       DN    D       K       n   L        bolt     C         A
+      ['1/2',     15,  3.75,   2.625,   4, 0.5625, '1/2"',  0.25,     0.84],
+      ['3/4',     20,  4,      2.875,   4, 0.5625, '1/2"',  0.25,     1.05],
+      ['1',       25,  4.5,    3.25,    4, 0.5625, '1/2"',  0.28125,  1.32],
+      ['1 1/4',   32,  4.75,   3.4375,  4, 0.5625, '1/2"',  0.3125,   1.66],
+      ['1 1/2',   40,  5.25,   3.875,   4, 0.5625, '1/2"',  0.34375,  1.9],
+      ['2',       50,  6,      4.5,     4, 0.6875, '5/8"',  0.375,    2.38],
+      ['2 1/2',   65,  6.5,    5,       4, 0.6875, '5/8"',  0.40625,  2.88],
+      ['3',       80,  7.25,   5.75,    4, 0.6875, '5/8"',  0.4375,   3.5],
+      ['3 1/2',   90,  8,      6.5,     8, 0.6875, '5/8"',  0.46875,  4.0],
+      ['4',      100,  8.5,    7,       8, 0.6875, '5/8"',  0.5,      4.5],
+      ['5',      125,  10,     8.25,    8, 0.6875, '5/8"',  0.5625,   5.56],
+      ['6',      150,  11,     9.25,    8, 0.875,  '3/4"',  0.6875,   6.63],
+      ['7',      175,  12,     10.25,   8, 0.875,  '3/4"',  0.75,     null],
+      ['8',      200,  13.25,  11.5,    8, 0.875,  '3/4"',  0.75,     8.63],
+      ['9',      225,  14.5,   12.75,  12, 0.875,  '3/4"',  0.8125,   null],
+      ['10',     250,  16,     14,     12, 0.875,  '3/4"',  0.875,   10.75],
+      ['12',     300,  18,     16,     12, 1,      '7/8"',  1,       12.75],
+      ['14',     350,  20.75,  18.5,   12, 1,      '7/8"',  1.125,   14],
+      ['15',     375,  21.75,  19.5,   12, 1,      '7/8"',  1.25,    null],
+      ['16',     400,  22.75,  20.5,   12, 1,      '7/8"',  1.25,    16],
+      ['18',     450,  25.25,  23,     16, 1,      '7/8"',  1.375,   18],
+      ['20',     500,  27.75,  25.25,  16, 1,      '7/8"',  1.5,     20],
+      ['24',     600,  32.5,   29.75,  16, 1.125,  '1"',    1.875,   24],
+    ],
+    unverified: {
+      175: '7" is only in the Inflow UK table. Hole size assumed 7/8" from the M20 bolt listed.',
+      225: '9" is only in the Inflow UK table. Hole size assumed 7/8" from the M20 bolt listed.',
+      375: '15" is only in the Inflow UK table. Hole size assumed 1" from the M22 bolt listed.',
+      90:  '3 1/2" is only in the Evenort BS 10 extract.',
+      100: 'Two sources give 8 bolts at 4" (Evenort, Inflow UK); a third (Complete Stainless) says 4.',
+      200: 'Evenort gives D = 13 1/4"; Inflow UK prints 13 3/4" (treated as a typo — D and E share OD everywhere else).',
+      250: 'Two sources give 12 bolts at 10" (Evenort, Inflow UK); a third (Complete Stainless) says 8.',
+    },
+    notes: [
+      'Table E is the next pressure step up from Table D (roughly 14 bar water).',
+      'Same outside diameter and PCD as Table D — tell them apart by thickness and, at 3 1/2", 4", 9", 10" and 18", by bolt count.',
+    ],
+    sources: ['BS 10:1962 (Evenort Ltd reproduction)', 'inflowuk.co.uk Flange Table - BS10', 'completestainless.co.uk quick flange table (third check)'],
+  },
+  {
+    id: 'BS10_F', family: 'BS 10', rating: 'Table F', material: 'Steel / cast iron (pre-metric UK)', unit: 'in',
+    aliases: ['BS10 Table F', 'BS 10 F'],
+    columns: ['nps', 'dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'pipeOD'],
+    thicknessLabels: { t1: 'Steel plate flange' },
+    rows: [
+      // NPS       DN    D       K       n   L        bolt      C       A
+      ['1/2',     15,  3.75,   2.625,   4, 0.5625, '1/2"',   0.375,  0.84],
+      ['3/4',     20,  4,      2.875,   4, 0.5625, '1/2"',   0.375,  1.05],
+      ['1',       25,  4.75,   3.4375,  4, 0.6875, '5/8"',   0.375,  1.32],
+      ['1 1/4',   32,  5.25,   3.875,   4, 0.6875, '5/8"',   0.5,    1.66],
+      ['1 1/2',   40,  5.5,    4.125,   4, 0.6875, '5/8"',   0.5,    1.9],
+      ['2',       50,  6.5,    5,       4, 0.6875, '5/8"',   0.625,  2.38],
+      ['2 1/2',   65,  7.25,   5.75,    8, 0.6875, '5/8"',   0.625,  2.88],
+      ['3',       80,  8,      6.5,     8, 0.6875, '5/8"',   0.625,  3.5],
+      ['3 1/2',   90,  8.5,    7,       8, 0.6875, '5/8"',   0.75,   4.0],
+      ['4',      100,  9,      7.5,     8, 0.6875, '5/8"',   0.75,   4.5],
+      ['5',      125,  11,     9.25,    8, 0.875,  '3/4"',   0.875,  5.56],
+      ['6',      150,  12,     10.25,  12, 0.875,  '3/4"',   0.875,  6.63],
+      ['8',      200,  14.5,   12.75,  12, 0.875,  '3/4"',   1,      8.63],
+      ['10',     250,  17,     15,     12, 1,      '7/8"',   1.125, 10.75],
+      ['12',     300,  19.25,  17.25,  16, 1,      '7/8"',   1.25,  12.75],
+      ['14',     350,  21.75,  19.5,   16, 1.125,  '1"',     1.375, 14],
+      ['16',     400,  24,     21.75,  20, 1.125,  '1"',     1.625, 16],
+      ['18',     450,  26.5,   24,     20, 1.25,   '1 1/8"', 1.75,  18],
+      ['20',     500,  29,     26.5,   24, 1.25,   '1 1/8"', 2,     20],
+      ['24',     600,  33.5,   30.75,  24, 1.375,  '1 1/4"', 2.25,  24],
+    ],
+    unverified: {
+      90: '3 1/2" is only in the Evenort BS 10 extract.',
+      500: 'Thickness: Evenort gives 2"; Inflow UK prints 1" (treated as a typo).',
+    },
+    notes: ['Table F is a higher pressure BS 10 table (roughly 21 bar water). Same OD/PCD as Table H at most sizes but thinner.'],
+    sources: ['BS 10:1962 (Evenort Ltd reproduction)', 'inflowuk.co.uk Flange Table - BS10'],
+  },
+
+  /* ------------------------------------------------------------------
+   * ASME B16.5  (also called ANSI B16.5)  —  Class 150 and Class 300
+   * Numbers in INCHES. Source 1: pipedata.org weld neck tables (OD,
+   * thickness, PCD, bolts, RF). Source 2: S.K. Fitting Valve ASME table
+   * (OD, PCD, hole, n, bolt). Fluidcon catalogue used as a third check.
+   * All agree. Thickness = minimum flange thickness, EXCLUDING the
+   * 1/16" (1.6 mm) raised face (2003+ editions). Older catalogues
+   * include the raised face, so a real flange can be ~1.6 mm thicker.
+   * pipeOD = ASME B36.10M pipe OD.
+   * ------------------------------------------------------------------ */
+  {
+    id: 'ASME_150', family: 'ASME B16.5', rating: 'Class 150', material: 'Steel (forged)', unit: 'in',
+    aliases: ['ANSI 150', 'ANSI B16.5 150#', '150 lb'],
+    columns: ['nps', 'dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Flange thickness (excl. 1.6 mm raised face)' },
+    rows: [
+      // NPS       DN    OD      PCD     n   hole    bolt       tf     RF      pipe OD
+      ['1/2',     15,  3.5,    2.375,   4, 0.625, '1/2"',    0.38,  1.38,   0.840],
+      ['3/4',     20,  3.875,  2.75,    4, 0.625, '1/2"',    0.44,  1.69,   1.050],
+      ['1',       25,  4.25,   3.125,   4, 0.625, '1/2"',    0.50,  2.00,   1.315],
+      ['1 1/4',   32,  4.625,  3.5,     4, 0.625, '1/2"',    0.56,  2.50,   1.660],
+      ['1 1/2',   40,  5,      3.875,   4, 0.625, '1/2"',    0.62,  2.88,   1.900],
+      ['2',       50,  6,      4.75,    4, 0.75,  '5/8"',    0.69,  3.62,   2.375],
+      ['2 1/2',   65,  7,      5.5,     4, 0.75,  '5/8"',    0.81,  4.12,   2.875],
+      ['3',       80,  7.5,    6,       4, 0.75,  '5/8"',    0.88,  5.00,   3.5],
+      ['3 1/2',   90,  8.5,    7,       8, 0.75,  '5/8"',    0.88,  5.50,   4.0],
+      ['4',      100,  9,      7.5,     8, 0.75,  '5/8"',    0.88,  6.19,   4.5],
+      ['5',      125,  10,     8.5,     8, 0.875, '3/4"',    0.88,  7.31,   5.563],
+      ['6',      150,  11,     9.5,     8, 0.875, '3/4"',    0.94,  8.50,   6.625],
+      ['8',      200,  13.5,   11.75,   8, 0.875, '3/4"',    1.06, 10.62,   8.625],
+      ['10',     250,  16,     14.25,  12, 1,     '7/8"',    1.12, 12.75,  10.75],
+      ['12',     300,  19,     17,     12, 1,     '7/8"',    1.19, 15.00,  12.75],
+      ['14',     350,  21,     18.75,  12, 1.125, '1"',      1.31, 16.25,  14],
+      ['16',     400,  23.5,   21.25,  16, 1.125, '1"',      1.38, 18.50,  16],
+      ['18',     450,  25,     22.75,  16, 1.25,  '1 1/8"',  1.50, 21.00,  18],
+      ['20',     500,  27.5,   25,     20, 1.25,  '1 1/8"',  1.62, 23.00,  20],
+      ['24',     600,  32,     29.5,   20, 1.375, '1 1/4"',  1.81, 27.25,  24],
+    ],
+    notes: ['Mostly found on imported pumps, valves and process kit. Class 150 is close to, but does NOT mate with, PN16 at most sizes.'],
+    sources: ['pipedata.org ASME B16.5 Class 150 weld neck', 'skfitting.com ASME B16.5 table', 'Fluidcon Engineers flange catalogue'],
+  },
+  {
+    id: 'ASME_300', family: 'ASME B16.5', rating: 'Class 300', material: 'Steel (forged)', unit: 'in',
+    aliases: ['ANSI 300', 'ANSI B16.5 300#', '300 lb'],
+    columns: ['nps', 'dn', 'od', 'pcd', 'n', 'hole', 'bolt', 't1', 'rf', 'pipeOD'],
+    thicknessLabels: { t1: 'Flange thickness (excl. 1.6 mm raised face)' },
+    rows: [
+      // NPS       DN    OD      PCD     n   hole    bolt       tf     RF      pipe OD
+      ['1/2',     15,  3.75,   2.625,   4, 0.625, '1/2"',    0.50,  1.38,   0.840],
+      ['3/4',     20,  4.625,  3.25,    4, 0.75,  '5/8"',    0.56,  1.69,   1.050],
+      ['1',       25,  4.875,  3.5,     4, 0.75,  '5/8"',    0.62,  2.00,   1.315],
+      ['1 1/4',   32,  5.25,   3.875,   4, 0.75,  '5/8"',    0.69,  2.50,   1.660],
+      ['1 1/2',   40,  6.125,  4.5,     4, 0.875, '3/4"',    0.75,  2.88,   1.900],
+      ['2',       50,  6.5,    5,       8, 0.75,  '5/8"',    0.81,  3.62,   2.375],
+      ['2 1/2',   65,  7.5,    5.875,   8, 0.875, '3/4"',    0.94,  4.12,   2.875],
+      ['3',       80,  8.25,   6.625,   8, 0.875, '3/4"',    1.06,  5.00,   3.5],
+      ['3 1/2',   90,  9,      7.25,    8, 0.875, '3/4"',    1.12,  5.50,   4.0],
+      ['4',      100,  10,     7.875,   8, 0.875, '3/4"',    1.19,  6.19,   4.5],
+      ['5',      125,  11,     9.25,    8, 0.875, '3/4"',    1.31,  7.31,   5.563],
+      ['6',      150,  12.5,   10.625, 12, 0.875, '3/4"',    1.38,  8.50,   6.625],
+      ['8',      200,  15,     13,     12, 1,     '7/8"',    1.56, 10.62,   8.625],
+      ['10',     250,  17.5,   15.25,  16, 1.125, '1"',      1.81, 12.75,  10.75],
+      ['12',     300,  20.5,   17.75,  16, 1.25,  '1 1/8"',  1.94, 15.00,  12.75],
+      ['14',     350,  23,     20.25,  20, 1.25,  '1 1/8"',  2.06, 16.25,  14],
+      ['16',     400,  25.5,   22.5,   20, 1.375, '1 1/4"',  2.19, 18.50,  16],
+      ['18',     450,  28,     24.75,  24, 1.375, '1 1/4"',  2.31, 21.00,  18],
+      ['20',     500,  30.5,   27,     24, 1.375, '1 1/4"',  2.44, 23.00,  20],
+      ['24',     600,  36,     32,     24, 1.625, '1 1/2"',  2.69, 27.25,  24],
+    ],
+    notes: ['Higher pressure ASME class; uncommon in water distribution.'],
+    sources: ['pipedata.org ASME B16.5 Class 300 weld neck', 'skfitting.com ASME B16.5 table', 'Fluidcon Engineers flange catalogue'],
+  },
+];
+
+/* BS 4504 note: BS 4504 Part 1 (steel) and Part 2 (cast iron) were
+ * replaced by BS EN 1092-1 and BS EN 1092-2. The mating dimensions
+ * (D, K, n, bolt) are the same for the sizes in this app, so BS 4504
+ * flanges are found through the EN 1092 tables (see `aliases`). */
+
+// Make the data usable from Node.js (for the tests) as well as the browser.
+if (typeof module !== 'undefined') module.exports = { FLANGE_TABLES };
+
+</script>
+<script>
+/* =====================================================================
+ * flange-logic.js  —  THE MATCHING ENGINE
+ * ---------------------------------------------------------------------
+ * Takes the site measurements, compares them with every flange in
+ * flange-data.js and returns a ranked list of likely flanges.
+ *
+ * Works in the browser (loaded by index.html) and in Node.js (used by
+ * tests.js). No libraries, just plain JavaScript.
+ *
+ * Main functions (read them in this order):
+ *   expandTables()   turn the compact data rows into easy objects (mm)
+ *   identify()       score every flange against the measurements
+ *   scoreFlange()    the scoring for ONE flange
+ *   boltLength()     suggested bolt / stud length
+ *   gasketInfo()     suggested gasket sizes
+ * ===================================================================== */
+
+const MM_PER_INCH = 25.4;
+
+/* ---------------- small helpers ---------------- */
+
+// Round to a number of decimal places, e.g. round(3.14159, 1) -> 3.1
+function round(x, dp = 1) {
+  const f = Math.pow(10, dp);
+  return Math.round(x * f) / f;
+}
+
+// Turn an inch text like '1 1/8"' or '5/8' or '0.75' into a decimal number of inches.
+function parseInchText(text) {
+  const s = String(text).replace(/["in]/g, '').trim();
+  let total = 0;
+  for (const part of s.split(/\s+/)) {
+    if (part.includes('/')) {
+      const [a, b] = part.split('/').map(Number);
+      total += a / b;
+    } else if (part !== '') {
+      total += Number(part);
+    }
+  }
+  return total;
+}
+
+// Bolt size text -> nominal diameter in mm. 'M16' -> 16, '5/8"' -> 15.875
+function boltDiameterMm(boltText) {
+  if (!boltText) return null;
+  const s = String(boltText).trim().toUpperCase();
+  if (s.startsWith('M')) return Number(s.slice(1));
+  return parseInchText(s) * MM_PER_INCH;
+}
+
+// Show a decimal inch value as a nice fraction, e.g. 8.5 -> '8 1/2"'
+function inchFraction(inches, denominator = 16) {
+  let whole = Math.floor(inches + 1e-9);
+  let num = Math.round((inches - whole) * denominator);
+  if (num === denominator) { whole += 1; num = 0; }
+  if (num === 0) return `${whole}"`;
+  let den = denominator;
+  while (num % 2 === 0) { num /= 2; den /= 2; }   // simplify 8/16 -> 1/2
+  return whole ? `${whole} ${num}/${den}"` : `${num}/${den}"`;
+}
+
+/* ---------------- bolt circle geometry ----------------
+ * Bolts are equally spaced on the pitch circle (PCD). Two adjacent bolt
+ * centres and the circle centre make an isosceles triangle with angle
+ * 360/n at the centre, so the straight-line (chord) distance c between
+ * adjacent bolts is:   c = PCD × sin(180° / n)
+ * and so:              PCD = c / sin(180° / n)
+ */
+function pcdFromChord(chord, n) {
+  return chord / Math.sin(Math.PI / n);
+}
+function chordFromPcd(pcd, n) {
+  return pcd * Math.sin(Math.PI / n);
+}
+
+/* ---------------- 1. expand the data tables ----------------
+ * Turns each compact row like [100, 220, 180, 8, 18, 'M16', ...] into an
+ * object { dn:100, od:220, pcd:180, ... } with every length in mm.
+ */
+function expandTables(tables) {
+  const flanges = [];
+  for (const table of tables) {
+    const toMm = table.unit === 'in' ? MM_PER_INCH : 1;
+    for (const row of table.rows) {
+      // Pair each value with its column name.
+      const r = {};
+      table.columns.forEach((col, i) => { r[col] = row[i]; });
+
+      const sizeKey = r.dn;   // rowNotes / unverified etc. are keyed by DN
+      const len = (v) => (v === null || v === undefined ? null : v * toMm);
+
+      // Collect every thickness column (t1, t2, t3...) that has a value.
+      const thickness = [];
+      for (const key of Object.keys(table.thicknessLabels || {})) {
+        if (r[key] !== null && r[key] !== undefined) {
+          thickness.push({ label: table.thicknessLabels[key], mm: len(r[key]) });
+        }
+      }
+
+      const notes = [...(table.notes || [])];
+      if (table.rowNotes && table.rowNotes[sizeKey]) notes.unshift(table.rowNotes[sizeKey]);
+      const flags = [];
+      if (table.unverified && table.unverified._all) flags.push(table.unverified._all);
+      if (table.unverified && table.unverified[sizeKey]) flags.push(table.unverified[sizeKey]);
+
+      const sizeLabel = r.nps ? `${r.nps}"` : `DN${r.dn}`;
+      flanges.push({
+        id: `${table.id}_${r.nps || r.dn}`,
+        tableId: table.id,
+        family: table.family,
+        rating: table.rating,
+        material: table.material,
+        unit: table.unit,                    // unit of the original table
+        aliases: table.aliases || [],
+        dn: r.dn,
+        nps: r.nps || null,
+        sizeLabel,
+        label: `${table.family} ${table.rating} ${sizeLabel}` + (r.nps ? ` (≈DN${r.dn})` : ''),
+        od: len(r.od),
+        odAlt: table.altOD && table.altOD[sizeKey] ? [table.altOD[sizeKey]] : [],  // altOD always in mm
+        pcd: len(r.pcd),
+        n: r.n,
+        nAlt: (table.altBoltCount && table.altBoltCount[sizeKey]) || [],
+        hole: len(r.hole),
+        bolt: r.bolt,
+        boltDia: boltDiameterMm(r.bolt),
+        thickness,
+        rf: len(r.rf),
+        pipeOD: len(r.pipeOD),
+        notes,
+        flags,
+        sources: table.sources || [],
+      });
+    }
+  }
+  return flanges;
+}
+
+/* ---------------- 2. tolerances ----------------
+ * How far a site measurement can be from the book value and still count
+ * as a good match. Tape-measuring a painted, corroded flange is not
+ * precise, so these are deliberately generous. The "tolerance" setting in
+ * the app multiplies all of them (tight = 0.6, normal = 1, loose = 1.6).
+ */
+const DEFAULT_TOL = {
+  od:     (v) => 3 + 0.005 * v,     // ±3 mm plus 0.5 % (big flanges are harder to measure)
+  pcd:    (v) => 2 + 0.003 * v,     // ±2 mm plus 0.3 %
+  chord:  (v) => 2 + 0.003 * v,     // ±2 mm between adjacent bolt centres
+  hole:   () => 1.5,                // ±1.5 mm
+  bolt:   () => 1.2,                // ±1.2 mm (M16 vs 5/8" = 0.1 mm apart, so these stay ambiguous)
+  rf:     (v) => 3 + 0.005 * v,
+  pipeOD: (v) => 2.5 + 0.01 * v,
+  // Thickness is lopsided: corrosion makes a flange THINNER (allow 4 mm),
+  // paint / raised face / gasket remains make it THICKER (allow 3 mm).
+  thicknessUnder: () => 4,
+  thicknessOver:  () => 3,
+};
+
+// How much each measurement counts towards the overall score.
+const WEIGHTS = { od: 3, pcd: 4, chord: 4, n: 4, hole: 2, bolt: 2, thickness: 1, rf: 1, pipeOD: 1.5 };
+
+/* Score how close a measured value is to an expected value.
+ *   ratio = |difference| / tolerance
+ *   inside the tolerance (ratio <= 1): 1.0 falling gently to 0.7
+ *   outside: falls on to 0 at three times the tolerance
+ */
+function closeness(diff, tol) {
+  const r = Math.abs(diff) / tol;
+  if (r <= 1) return 1 - 0.3 * r * r;
+  return Math.max(0, 0.7 - 0.35 * (r - 1));
+}
+function statusFrom(diff, tol) {
+  const r = Math.abs(diff) / tol;
+  return r <= 1 ? 'good' : r <= 2 ? 'close' : 'bad';
+}
+
+/* ---------------- 3. score ONE flange ----------------
+ * m = measurements in mm (any may be missing):
+ *   { od, pcd, chord, n, hole, boltDia, thickness, rf, pipeOD }
+ * Returns { score 0-100, checks: [...] } where each check explains one
+ * comparison, so the app can say WHY a flange matched or didn't.
+ */
+function scoreFlange(f, m, tolFactor = 1) {
+  const checks = [];
+  let total = 0, weightSum = 0;
+
+  // Generic compare: try the main value and any alternatives, keep the best.
+  function compare(field, name, measured, expectedList, tolFn) {
+    const list = expectedList.filter((v) => v !== null && v !== undefined);
+    if (measured === undefined || measured === null || isNaN(measured)) return;
+    if (list.length === 0) {
+      checks.push({ field, name, measured, expected: null, status: 'na', text: `${name}: no standard value to compare` });
+      return;
+    }
+    let best = null;
+    for (const exp of list) {
+      const diff = measured - exp;
+      const tol = tolFn(exp) * tolFactor;
+      const s = closeness(diff, tol);
+      if (!best || s > best.s) best = { exp, diff, tol, s };
+    }
+    total += WEIGHTS[field] * best.s;
+    weightSum += WEIGHTS[field];
+    const st = statusFrom(best.diff, best.tol);
+    checks.push({
+      field, name, measured, expected: best.exp, diff: best.diff, tol: best.tol, status: st,
+      text: `${name}: measured ${round(measured)} mm, standard ${round(best.exp)} mm ` +
+            `(${best.diff >= 0 ? '+' : ''}${round(best.diff)} mm, tolerance ±${round(best.tol)})`,
+    });
+  }
+
+  compare('od', 'Outside diameter', m.od, [f.od, ...f.odAlt], DEFAULT_TOL.od);
+
+  // Bolt count: either right or wrong. Alternatives (e.g. DN65 4 or 8) score 0.9.
+  let boltCountWrong = false;
+  if (m.n) {
+    let s = 0, status = 'bad', text;
+    if (m.n === f.n) { s = 1; status = 'good'; text = `Bolt count: ${m.n} matches`; }
+    else if (f.nAlt.includes(m.n)) { s = 0.9; status = 'good'; text = `Bolt count: ${m.n} is an allowed alternative (standard lists ${f.n})`; }
+    else { boltCountWrong = true; text = `Bolt count: measured ${m.n}, standard has ${f.n}`; }
+    total += WEIGHTS.n * s; weightSum += WEIGHTS.n;
+    checks.push({ field: 'n', name: 'Bolt count', measured: m.n, expected: f.n, status, text });
+  }
+
+  // PCD: use the measured PCD if given. If only the chord (adjacent bolt
+  // centres) is given, compare chords directly, using the measured bolt
+  // count if we have it, otherwise this flange's own bolt count.
+  if (m.pcd) {
+    compare('pcd', 'PCD', m.pcd, [f.pcd], DEFAULT_TOL.pcd);
+  } else if (m.chord) {
+    const nUsed = m.n || f.n;
+    const expectedChord = chordFromPcd(f.pcd, nUsed);
+    compare('chord', `Adjacent bolt centres (${nUsed} bolts)`, m.chord, [expectedChord], DEFAULT_TOL.chord);
+    const c = checks[checks.length - 1];
+    c.text += ` → PCD from chord = ${round(pcdFromChord(m.chord, nUsed))} mm vs ${round(f.pcd)} mm`;
+  }
+
+  compare('hole', 'Bolt hole', m.hole, [f.hole], DEFAULT_TOL.hole);
+  compare('bolt', 'Bolt diameter', m.boltDia, [f.boltDia], DEFAULT_TOL.bolt);
+
+  // Thickness: compare with the nearest of the listed flange-type thicknesses,
+  // using the lopsided tolerance (thinner allowed more than thicker).
+  if (m.thickness) {
+    if (f.thickness.length === 0) {
+      checks.push({ field: 'thickness', name: 'Thickness', status: 'na', text: 'Thickness: no standard value to compare' });
+    } else {
+      let best = null;
+      for (const t of f.thickness) {
+        const diff = m.thickness - t.mm;
+        const tol = (diff < 0 ? DEFAULT_TOL.thicknessUnder() : DEFAULT_TOL.thicknessOver()) * tolFactor;
+        const s = closeness(diff, tol);
+        if (!best || s > best.s) best = { t, diff, tol, s };
+      }
+      total += WEIGHTS.thickness * best.s; weightSum += WEIGHTS.thickness;
+      checks.push({
+        field: 'thickness', name: 'Thickness', measured: m.thickness, expected: best.t.mm, diff: best.diff,
+        status: statusFrom(best.diff, best.tol),
+        text: `Thickness: measured ${round(m.thickness)} mm, nearest standard ${round(best.t.mm)} mm (${best.t.label}). ` +
+              `Thickness varies by flange type and material, so it is only a weak clue.`,
+      });
+    }
+  }
+
+  compare('rf', 'Raised face diameter', m.rf, [f.rf], DEFAULT_TOL.rf);
+  compare('pipeOD', 'Pipe OD', m.pipeOD, [f.pipeOD], DEFAULT_TOL.pipeOD);
+
+  let score = weightSum ? (100 * total) / weightSum : 0;
+  // A wrong bolt count is almost always decisive, so knock the score down hard.
+  if (boltCountWrong) score *= 0.6;
+  // Every measurement outside tolerance makes the whole match less believable:
+  // 'close' (1-2 × tolerance) costs 7 %, 'bad' (over 2 × tolerance) costs 20 %.
+  for (const c of checks) {
+    if (c.field === 'n' || c.field === 'thickness') continue;   // already handled / weak clue
+    if (c.status === 'close') score *= 0.93;
+    if (c.status === 'bad') score *= 0.8;
+  }
+  return { score: round(score, 0), checks, fieldsCompared: weightSum };
+}
+
+/* ---------------- 4. identify: score everything ----------------
+ * Returns the best matches, best first. Flanges with the same OD, PCD,
+ * bolt count and hole size (e.g. PN10 and PN16 at DN100) are grouped,
+ * because no tape measure can tell them apart.
+ */
+function identify(flanges, m, options = {}) {
+  const tolFactor = options.tolFactor || 1;
+  const minScore = options.minScore ?? 40;
+  const maxResults = options.maxResults || 12;
+
+  const anyInput = ['od', 'pcd', 'chord', 'n', 'hole', 'boltDia', 'thickness', 'rf', 'pipeOD']
+    .some((k) => m[k] !== undefined && m[k] !== null && !isNaN(m[k]));
+  if (!anyInput) return [];
+
+  const scored = flanges
+    .filter((f) => !options.families || options.families.includes(f.family))
+    .map((f) => ({ flange: f, ...scoreFlange(f, m, tolFactor) }))
+    .filter((r) => r.score >= minScore)
+    .sort((a, b) => b.score - a.score || a.flange.dn - b.flange.dn);
+
+  // Group flanges with identical mating dimensions (within 0.5 mm).
+  const groups = [];
+  for (const r of scored) {
+    const g = groups.find((g) => sameDrilling(g.items[0].flange, r.flange) && Math.abs(g.items[0].score - r.score) <= 5);
+    if (g) g.items.push(r);
+    else groups.push({ items: [r] });
+  }
+  for (const g of groups) {
+    g.best = g.items[0];
+    g.twinNote = g.items.length > 1 ? twinExplanation(g.items.map((i) => i.flange)) : null;
+  }
+  return groups.slice(0, maxResults);
+}
+
+function sameDrilling(a, b) {
+  // Same OD and PCD (within 0.5 mm) and same bolt count = they bolt together.
+  // Holes may differ slightly (steel 18 mm vs ductile iron 19 mm for M16).
+  const near = (x, y, t) => Math.abs(x - y) <= t;
+  return near(a.od, b.od, 0.5) && near(a.pcd, b.pcd, 0.5) && a.n === b.n && near(a.hole, b.hole, 1.6);
+}
+
+// Explain how (or whether) you can tell identical-drilling flanges apart.
+function twinExplanation(list) {
+  const names = list.map((f) => `${f.family} ${f.rating}`).join(', ');
+  const thick = list.map((f) => f.thickness.map((t) => round(t.mm)).join('/') || '–');
+  const allSameThickness = thick.every((t) => t === thick[0]);
+  const holes = [...new Set(list.map((f) => round(f.hole)))];
+  let text = `These have the same outside diameter, PCD and bolt count: ${names}. ` +
+             `They will bolt together, and a tape measure cannot tell them apart.`;
+  if (holes.length > 1) {
+    text += ` Bolt holes differ slightly (${list.map((f) => `${f.family} ${f.rating}: ${round(f.hole)} mm`).join('; ')}) — ` +
+            `cast/ductile iron flanges have 1 mm bigger holes than steel, which can hint at the material.`;
+  }
+  if (!allSameThickness) {
+    text += ` Their listed thicknesses differ (${list.map((f, i) => `${f.rating}: ${thick[i]} mm`).join('; ')}), ` +
+            `which may help if the flange is in good condition.`;
+  }
+  text += ' To be sure, look for the PN or table marking cast or stamped on the flange, valve body or nameplate, ' +
+          'check asset records or drawings, and if still unknown treat it as the LOWER rating.';
+  return text;
+}
+
+/* ---------------- 5. bolt length and gasket ----------------
+ * Rough guide only. Bolt length =
+ *   2 × flange thickness + gasket (3 mm) + 2 washers + nut height + 2-3 threads showing
+ * Nut height ≈ 0.8 d (ISO 4032), thread allowance ≈ 0.3 d.
+ * Rounded UP to the next 5 mm (10 mm above 200 mm).
+ */
+function washerThickness(d) {
+  if (d <= 12.5) return 2.5;
+  if (d <= 20.5) return 3;
+  if (d <= 30.5) return 4;
+  return 5;
+}
+function boltLength(f, measuredThickness) {
+  const d = f.boltDia;
+  if (!d) return null;
+  // Thickness to use: what was measured on site, else the thickest listed type (safe side).
+  let t = measuredThickness || (f.thickness.length ? Math.max(...f.thickness.map((x) => x.mm)) : null);
+  if (!t) return null;
+  // ASME thicknesses exclude the 1.6 mm raised face, so add it back.
+  if (f.family === 'ASME B16.5') t += 1.6;
+  const gasket = 3, washer = washerThickness(d), nut = 0.8 * d, spare = 0.3 * d;
+  const roundUp = (x) => (x > 200 ? Math.ceil(x / 10) * 10 : Math.ceil(x / 5) * 5);
+  const bolt = roundUp(2 * t + gasket + 2 * washer + nut + spare);
+  const stud = roundUp(2 * t + gasket + 2 * washer + 2 * (nut + spare));
+  return { thicknessUsed: round(t), bolt, stud, d };
+}
+
+/* Gasket sizes.
+ *  - IBC (inside bolt circle) flat gasket: sits inside the bolts.
+ *    Its OD is about PCD − hole diameter (this matches EN 1514-1 for
+ *    EN 1092 flanges, e.g. DN100 PN16: 180 − 18 = 162 mm).
+ *  - Full face gasket: same OD as the flange, with bolt holes punched.
+ *    Usual on flat-faced cast/ductile iron flanges in water.
+ */
+function gasketInfo(f) {
+  const ibcOD = f.pcd - f.hole;
+  const id = f.pipeOD ? f.pipeOD : null;
+  return {
+    ibcOD: round(ibcOD, 0),
+    id: id ? round(id, 0) : null,
+    fullFaceOD: round(f.od, 0),
+    text: `IBC gasket ≈ ${round(ibcOD, 0)} mm OD` + (id ? ` × ${round(id, 0)} mm ID` : '') +
+          `; full face gasket ${round(f.od, 0)} mm OD with ${f.n} × ${round(f.hole, 1)} mm holes on ${round(f.pcd, 1)} mm PCD. ` +
+          (f.family === 'ASME B16.5' ? 'For ASME, buy to B16.21 for the exact size. ' : 'Exact sizes: EN 1514-1. ') +
+          'For drinking water use a WRAS-approved EPDM gasket.',
+  };
+}
+
+// Make the functions available to Node.js tests.
+if (typeof module !== 'undefined') {
+  module.exports = {
+    MM_PER_INCH, round, parseInchText, boltDiameterMm, inchFraction,
+    pcdFromChord, chordFromPcd, expandTables, scoreFlange, identify,
+    sameDrilling, boltLength, gasketInfo, DEFAULT_TOL, WEIGHTS,
+  };
+}
+
+</script>
+<script>
+/* =====================================================================
+ * flange-drawing.js  —  THE FLANGE DRAWING (SVG)
+ * ---------------------------------------------------------------------
+ * drawFlange(flange, options) returns the text of an SVG picture:
+ *   1. a FACE VIEW (looking straight at the flange) drawn to scale:
+ *      outside diameter, raised face, bore, dashed PCD circle and the
+ *      right number of bolt holes at the right size and spacing;
+ *   2. a SIDE VIEW of a bolted joint: this flange, a gasket, a dashed
+ *      mating flange and a bolt + nut, with thickness and bolt length.
+ *
+ * SVG is just text describing shapes, e.g.
+ *     <circle cx="100" cy="100" r="50" />
+ * so we build one long string and the page puts it on screen with
+ * element.innerHTML = drawFlange(...). Because it is only a string,
+ * the tests can run it in Node.js and count the bolt holes.
+ *
+ * Coordinates: SVG's (0,0) is the TOP-LEFT corner and y goes DOWN.
+ * Everything is drawn in "drawing units" inside a viewBox 640 wide;
+ * the browser then scales the whole picture to fit the screen.
+ *
+ * Helper names start with "fd" so they never clash with the helpers
+ * in flange-logic.js (all the files share one page).
+ * ===================================================================== */
+
+const FD = {
+  width: 640,        // viewBox width (drawing units)
+  cx: 320,           // centre of the face view
+  R: 185,            // radius the flange OD is drawn at
+  font: 19,          // normal label size
+  colours: { good: '#1a8a4a', close: '#c98a00', bad: '#c0392b', ink: '#1d2733', muted: '#5d6b7a',
+             metal: '#d9e0e8', face: '#c4ced9', edge: '#4a5866', dim: '#0b5cad', highlight: '#d35400' },
+};
+
+/* ---------- tiny helpers ---------- */
+function fdRound(x, dp = 1) { const f = Math.pow(10, dp); return Math.round(x * f) / f; }
+
+// Decimal inches -> '8 1/2"' (nearest 1/16)
+function fdInch(inches) {
+  let whole = Math.floor(inches + 1e-9);
+  let num = Math.round((inches - whole) * 16), den = 16;
+  if (num === 16) { whole += 1; num = 0; }
+  if (num === 0) return `${whole}"`;
+  while (num % 2 === 0) { num /= 2; den /= 2; }
+  return whole ? `${whole} ${num}/${den}"` : `${num}/${den}"`;
+}
+
+// Rough width of a line of text in drawing units (average character ≈ 0.56 × font size).
+function fdWidth(line) { return String(line.text).length * (line.size || FD.font) * (line.bold ? 0.6 : 0.56); }
+
+// Escape text so characters like < or & can't break the SVG.
+function fdEsc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+// A length for a label: '220 mm' or '228.6 mm (9")' when inches are wanted.
+function fdLen(mm, inch, dp = 1) {
+  if (mm === null || mm === undefined) return '—';
+  return `${fdRound(mm, dp)} mm` + (inch ? ` (${fdInch(mm / 25.4)})` : '');
+}
+
+/* Text with a white halo (paint-order: stroke) so it stays readable
+ * when it sits on top of lines or the grey metal.
+ * lines = array of { text, colour, bold, size } drawn one under another. */
+function fdText(x, y, lines, anchor = 'middle') {
+  return lines.filter(Boolean).map((l, i) => {
+    const size = l.size || FD.font;
+    return `<text x="${x}" y="${y + i * (FD.font + 4)}" text-anchor="${anchor}" font-size="${size}"` +
+      ` font-weight="${l.bold ? 700 : 400}" fill="${l.colour || FD.colours.ink}"` +
+      ` style="paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round">${fdEsc(l.text)}</text>`;
+  }).join('');
+}
+
+// A dimension line with an arrowhead at each end (marker defined in <defs>).
+function fdDim(x1, y1, x2, y2, colour = FD.colours.dim) {
+  return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${colour}" stroke-width="1.6"` +
+    ` marker-start="url(#fdArrow)" marker-end="url(#fdArrow)"/>`;
+}
+function fdLine(x1, y1, x2, y2, colour = FD.colours.muted, extra = '') {
+  return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${colour}" stroke-width="1.2" ${extra}/>`;
+}
+
+/* The second line of a label: what the user measured, coloured by how
+ * well it matched. Uses the "checks" made by scoreFlange() in flange-logic.js. */
+const FD_MARK = { good: '✓', close: '~', bad: '✗' };
+function fdMeasured(check, inch) {
+  if (!check || check.measured === undefined || check.status === 'na') return null;
+  return {
+    text: `site ${fdLen(check.measured, inch)} ${FD_MARK[check.status] || ''}`,
+    colour: FD.colours[check.status] || FD.colours.muted,
+    size: FD.font - 2,
+  };
+}
+
+/* Raised face height f1 (mm). ASME B16.5 Class 150/300: 1/16" = 1.6 mm.
+ * EN 1092-1:2018 Table 8 gives f1 = 2 mm (DN10-32), 3 mm (DN40-250),
+ * 4 mm (DN300-500), 5 mm (DN600 and up). BS 10 flanges are usually flat
+ * faced. Returns null when not known. */
+function fdRaisedFaceHeight(f) {
+  if (!f.rf) return null;
+  if (f.family === 'ASME B16.5') return 1.6;
+  if (f.family.startsWith('EN 1092')) {
+    if (f.dn <= 32) return 2;
+    if (f.dn <= 250) return 3;
+    if (f.dn <= 500) return 4;
+    return 5;
+  }
+  return null;
+}
+
+// Short name for a thickness type, for labels.
+function fdShortType(label) {
+  if (/Plate/i.test(label)) return 'plate flange';
+  if (/Weld neck/i.test(label)) return 'weld neck';
+  if (/Blind/i.test(label)) return 'blind';
+  if (/iron/i.test(label)) return 'iron';
+  return 'flange';
+}
+
+/* Hole angles. Bolt holes always STRADDLE the vertical and horizontal
+ * centre lines (no hole sits on 12 o'clock). Measured clockwise from
+ * 12 o'clock, hole i is at (i + 0.5) × 360°/n. */
+function fdHoleAngles(n) {
+  const a = [];
+  for (let i = 0; i < n; i++) a.push(((i + 0.5) * 2 * Math.PI) / n);
+  return a;
+}
+
+/* =====================================================================
+ * drawFlange(f, options)
+ *   f        a flange object from expandTables() (all lengths in mm)
+ *   options  { checks: [...] from scoreFlange (to show site values),
+ *              showInch: true/false,
+ *              bolt: result of boltLength() (optional),
+ *              compact: true on a phone — bigger text, smaller flange,
+ *                       so labels stay readable when the picture shrinks }
+ * Returns an SVG string.
+ * ===================================================================== */
+function drawFlange(f, options = {}) {
+  const C = FD.colours;
+  const checks = {};
+  for (const c of options.checks || []) checks[c.field] = c;
+  const inch = f.unit === 'in' || !!options.showInch;
+
+  // Size settings. The phone ("compact") version uses bigger text.
+  FD.font = options.compact ? 25 : 19;
+  FD.R = options.compact ? 160 : 185;
+  const F = FD.font, LH = F + 4;            // font size and line height
+  const small = F - 3, tiny = F - 5;
+  const { cx, R } = FD;
+  const s = R / (f.od / 2);                 // scale: drawing units per mm
+  const out = [];                           // pieces of SVG, joined at the end
+
+  /* ---------- title ---------- */
+  const size = f.nps ? `${f.nps}" (≈DN${f.dn})` : `DN${f.dn}`;
+  const title = `${f.family}  ${f.rating}  ${size}`;
+  const titleSize = Math.min(F + 6, Math.floor(1050 / title.length));   // shrink long titles to fit
+  out.push(fdText(cx, F + 12, [{ text: title, bold: true, size: titleSize }]));
+  out.push(fdText(cx, F + 12 + LH + 4, [{ text: `${f.material} · drawn to scale`, colour: C.muted, size: tiny }]));
+
+  /* ---------- FACE VIEW ----------
+   * The chord label sits above the circle, so work out its height first. */
+  const chordMm = f.pcd * Math.sin(Math.PI / f.n);
+  const chordLines = [
+    { text: fdLen(chordMm, inch), colour: C.highlight, bold: true },
+    { text: 'adjacent bolt centres', colour: C.highlight, size: small },
+    fdMeasured(checks.chord, inch),
+  ].filter(Boolean);
+  const topOfFace = F + 12 + 2 * LH + 14 + chordLines.length * LH + 10;
+  const cy = topOfFace + R;
+  const pcdR = (f.pcd / 2) * s;
+  const holeR = Math.max(2.5, (f.hole / 2) * s);
+  const rfR = f.rf ? (f.rf / 2) * s : null;
+  const boreR = f.pipeOD ? (f.pipeOD / 2) * s : null;
+
+  // Flange body (grey disc), raised face (darker ring) and bore (white hole)
+  out.push(`<circle cx="${cx}" cy="${cy}" r="${R}" fill="${C.metal}" stroke="${C.edge}" stroke-width="2"/>`);
+  if (rfR) out.push(`<circle cx="${cx}" cy="${cy}" r="${rfR}" fill="${C.face}" stroke="${C.edge}" stroke-width="1.2"/>`);
+  if (boreR) out.push(`<circle cx="${cx}" cy="${cy}" r="${boreR}" fill="#fff" stroke="${C.edge}" stroke-width="1.5"/>`);
+
+  // Centre lines (long-dash-dot, as on an engineering drawing)
+  out.push(fdLine(cx - R - 12, cy, cx + R + 12, cy, C.muted, 'stroke-dasharray="14 4 3 4"'));
+  out.push(fdLine(cx, cy - R - 8, cx, cy + R + 12, C.muted, 'stroke-dasharray="14 4 3 4"'));
+
+  // PCD: dashed circle through the bolt-hole centres
+  out.push(`<circle cx="${cx}" cy="${cy}" r="${pcdR}" fill="none" stroke="${C.dim}" stroke-width="1.4" stroke-dasharray="7 5"/>`);
+
+  // Bolt holes. Each gets class="bolt-hole" so the tests can count them.
+  const angles = fdHoleAngles(f.n);
+  const holeXY = angles.map((a) => [cx + pcdR * Math.sin(a), cy - pcdR * Math.cos(a)]);
+  for (const [x, y] of holeXY) {
+    out.push(`<circle class="bolt-hole" cx="${fdRound(x, 2)}" cy="${fdRound(y, 2)}" r="${fdRound(holeR, 2)}" fill="#fff" stroke="${C.edge}" stroke-width="1.5"/>`);
+  }
+
+  // --- Chord: the two holes either side of 12 o'clock, joined by a line,
+  //     with its label centred above the flange.
+  const [x1, y1] = holeXY[f.n - 1], [x2, y2] = holeXY[0];
+  out.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C.highlight}" stroke-width="2.5"/>`);
+  out.push(fdText(cx, topOfFace - 10 - (chordLines.length - 1) * LH, chordLines));
+
+  // --- PCD dimension: straight across the centre, end to end on the dashed circle
+  out.push(fdDim(cx - pcdR, cy, cx + pcdR, cy));
+  out.push(fdText(cx, cy - 10, [{ text: `PCD ${fdLen(f.pcd, inch)}`, colour: C.dim, bold: true }]));
+  const mPcd = fdMeasured(checks.pcd, inch);
+  if (mPcd) out.push(fdText(cx, cy + F + 6, [mPcd]));
+
+  // --- Bolt holes callout: top-right corner, leader to the hole nearest 2 o'clock.
+  //     Bolt count and hole size from site are merged into one coloured line.
+  let hi = 0, best = 9;
+  angles.forEach((a, i) => { const d = Math.abs(a - Math.PI / 3); if (d < best) { best = d; hi = i; } });
+  const [hx, hy] = holeXY[hi];
+  const labX = FD.width - 6, labY = cy - R + 4;
+  // Site values: bolt count and hole size merged into one coloured line,
+  // coloured by the worse of the two.
+  const parts = [checks.n, checks.hole].filter((c) => c && c.status !== 'na');
+  let site = null;
+  if (parts.length) {
+    const worst = parts.some((c) => c.status === 'bad') ? 'bad' : parts.some((c) => c.status === 'close') ? 'close' : 'good';
+    const what = [checks.n ? `${checks.n.measured}` : null, checks.hole ? `Ø${fdRound(checks.hole.measured)}` : null].filter(Boolean);
+    const txt = `site ${what.join(' × ')}${checks.n && !checks.hole ? ' bolts' : ''} ${FD_MARK[worst]}`;
+    site = { text: txt, colour: C[worst], size: small };
+  }
+  const holeLines = [
+    { text: `${f.n} × Ø${fdRound(f.hole)}`, bold: true },
+    { text: `holes, ${f.bolt}` + (inch ? ` (Ø${fdInch(f.hole / 25.4)})` : ''), size: small },
+    site,
+  ].filter(Boolean);
+  // Leader ends just left of the widest label line, level with the first line.
+  const labW = Math.max(...holeLines.map(fdWidth));
+  out.push(fdLine(hx + holeR * 0.7, hy - holeR * 0.7, labX - labW - 6, labY - F * 0.3, C.ink));
+  out.push(fdText(labX, labY, holeLines, 'end'));
+
+  // --- Raised face callout: bottom-left corner
+  const lowY = cy + R - 2 * LH + 6;
+  if (rfR) {
+    const a = (225 * Math.PI) / 180;
+    const px = cx + rfR * Math.sin(a), py = cy - rfR * Math.cos(a);
+    out.push(fdLine(px, py, 6 + 4.6 * F, lowY + 6, C.ink));
+    out.push(fdText(6, lowY, [
+      { text: 'Raised face', size: small, colour: C.muted },
+      { text: `Ø${fdLen(f.rf, inch, 0)}`, bold: true },
+      fdMeasured(checks.rf, inch),
+    ], 'start'));
+  }
+
+  // --- Bore / pipe OD callout: bottom-right corner
+  if (boreR) {
+    const a = (135 * Math.PI) / 180;
+    const px = cx + boreR * Math.sin(a), py = cy - boreR * Math.cos(a);
+    out.push(fdLine(px, py, FD.width - 6 - 5 * F, lowY + 6, C.ink));
+    out.push(fdText(FD.width - 6, lowY, [
+      { text: 'Pipe OD', size: small, colour: C.muted },
+      { text: `Ø${fdLen(f.pipeOD, inch)}`, bold: true },
+      fdMeasured(checks.pipeOD, inch),
+    ], 'end'));
+  }
+
+  // --- OD dimension below the face view, with extension lines
+  const odY = cy + R + 26 + (checks.rf || checks.pipeOD ? LH : 0);
+  out.push(fdLine(cx - R, cy + 4, cx - R, odY + 8));
+  out.push(fdLine(cx + R, cy + 4, cx + R, odY + 8));
+  out.push(fdDim(cx - R, odY, cx + R, odY));
+  const odLines = [
+    { text: `OD ${fdLen(f.od, inch)}` + (f.odAlt.length ? ` (or ${fdRound(f.odAlt[0])} DI)` : ''), bold: true, colour: C.dim },
+    fdMeasured(checks.od, inch),
+  ].filter(Boolean);
+  out.push(fdText(cx, odY + F + 6, odLines));
+
+  /* ---------- SIDE VIEW (bolted joint) ----------
+   * Same scale as the face view, so thickness looks right next to the OD.
+   * Top to bottom: bolt head, THIS flange, gasket, mating flange (dashed), nut.
+   * The joint face (raised face) of each flange faces the gasket. */
+  let y = odY + F + 6 + odLines.length * LH + 22;
+  out.push(fdText(cx, y, [{ text: 'Side view: bolted joint, mating flange dashed', colour: C.muted, size: small }]));
+  y += LH + 4;
+
+  // Which thickness to draw: the one nearest the site measurement, else
+  // weld neck / iron / the first listed.
+  let tEntry = null;
+  if (checks.thickness && checks.thickness.expected) tEntry = f.thickness.find((t) => t.mm === checks.thickness.expected);
+  if (!tEntry) tEntry = f.thickness.find((t) => /Weld neck|iron|Flange thickness/i.test(t.label)) || f.thickness[0] || null;
+  const tKnown = !!tEntry;
+  const tMm = tKnown ? tEntry.mm : f.od * 0.08;      // stand-in if the table has no thickness
+  const rfh = fdRaisedFaceHeight(f);
+  // EN thickness includes the raised face; ASME thickness excludes it.
+  const bodyMm = f.family === 'ASME B16.5' ? tMm : tMm - (rfh || 0);
+  const gasketMm = 3;
+  const d = f.boltDia;
+  const headMm = 0.65 * d, nutMm = 0.8 * d;
+  const boltLenMm = options.bolt ? options.bolt.bolt : null;
+
+  const px = (mm) => mm * s;                   // mm -> drawing units
+  const left = cx - R, wide = 2 * R;
+  const rfLeft = rfR ? cx - rfR : null, rfWide = rfR ? 2 * rfR : null;
+  // In side view the outermost bolts are seen at ±PCD/2 × cos(180°/n) from the centre.
+  const boltXs = [cx - pcdR * Math.cos(Math.PI / f.n), cx + pcdR * Math.cos(Math.PI / f.n)];
+  const boltW = px(d);
+
+  const yHead = y;
+  const yA = yHead + px(headMm);               // top (back) of this flange
+  const yAface = yA + px(bodyMm);              // start of its raised face
+  const yG = yAface + px(rfh || 0);            // top of gasket
+  const yB = yG + px(gasketMm);                // mating raised face
+  const yBbody = yB + px(rfh || 0);
+  const yBend = yBbody + px(bodyMm);           // back of mating flange
+  const yNutEnd = yBend + px(nutMm);
+  const yBoltEnd = boltLenMm ? yA + px(boltLenMm) : yNutEnd + px(0.3 * d);
+
+  // This flange (solid) and its raised face
+  out.push(`<rect x="${left}" y="${yA}" width="${wide}" height="${px(bodyMm)}" fill="${C.metal}" stroke="${C.edge}" stroke-width="2" ${tKnown ? '' : 'stroke-dasharray="6 4"'}/>`);
+  if (rfh) out.push(`<rect x="${rfLeft}" y="${yAface}" width="${rfWide}" height="${px(rfh)}" fill="${C.face}" stroke="${C.edge}" stroke-width="1.5"/>`);
+  // Gasket (dark band) — inside the bolts: spans the raised face, or up to the bolts
+  const gW = rfR ? rfWide : (boltXs[1] - boltXs[0] - boltW);
+  out.push(`<rect x="${cx - gW / 2}" y="${yG}" width="${gW}" height="${px(gasketMm)}" fill="#333"/>`);
+  // Mating flange (dashed outline)
+  if (rfh) out.push(`<rect x="${rfLeft}" y="${yB}" width="${rfWide}" height="${px(rfh)}" fill="none" stroke="${C.muted}" stroke-dasharray="5 4"/>`);
+  out.push(`<rect x="${left}" y="${yBbody}" width="${wide}" height="${px(bodyMm)}" fill="none" stroke="${C.muted}" stroke-width="1.5" stroke-dasharray="6 4"/>`);
+  // Bore as hidden (dashed) lines through this flange
+  if (boreR) for (const bx of [cx - boreR, cx + boreR]) out.push(fdLine(bx, yA, bx, yG, C.edge, 'stroke-dasharray="4 3"'));
+  // Bolts: head, shank, nut
+  for (const bx of boltXs) {
+    out.push(`<rect x="${bx - boltW * 0.8}" y="${yHead}" width="${boltW * 1.6}" height="${px(headMm)}" fill="#8a96a3" stroke="${C.edge}"/>`);
+    out.push(`<rect x="${bx - boltW / 2}" y="${yA}" width="${boltW}" height="${yBoltEnd - yA}" fill="#aab4bf" stroke="${C.edge}"/>`);
+    out.push(`<rect x="${bx - boltW * 0.8}" y="${yBend}" width="${boltW * 1.6}" height="${px(nutMm)}" fill="#8a96a3" stroke="${C.edge}"/>`);
+  }
+
+  // Thickness dimension (left side)
+  const tx = left - 14;
+  out.push(fdLine(left - 4, yA, tx - 6, yA));
+  out.push(fdLine(left - 4, yG, tx - 6, yG));
+  out.push(fdDim(tx, yA, tx, yG));
+  const tLines = (tKnown
+    ? [{ text: `t ${fdLen(tMm, false)}`, bold: true }, { text: fdShortType(tEntry.label), size: tiny, colour: C.muted },
+       inch ? { text: fdInch(tMm / 25.4), size: tiny, colour: C.muted } : null]
+    : [{ text: 'thickness', size: small }, { text: 'not in table', size: tiny, colour: C.muted }]);
+  const mt = fdMeasured(checks.thickness, false);
+  if (mt) tLines.push({ ...mt, text: mt.text.replace(' mm', ''), size: tiny });
+  out.push(fdText(tx - 8, yA + F * 0.4, tLines.filter(Boolean), 'end'));
+
+  // Bolt length dimension (right side)
+  const bxr = cx + R + 14;
+  out.push(fdLine(boltXs[1] + boltW, yA, bxr + 6, yA));
+  out.push(fdLine(boltXs[1] + boltW, yBoltEnd, bxr + 6, yBoltEnd));
+  out.push(fdDim(bxr, yA, bxr, yBoltEnd));
+  const bLines = [
+    { text: boltLenMm ? `${f.bolt}×${boltLenMm}` : f.bolt, bold: true },
+    { text: boltLenMm ? 'bolt (est.)' : 'length n/a', size: tiny, colour: C.muted },
+    options.bolt ? { text: `stud ${options.bolt.stud}`, size: tiny, colour: C.muted } : null,
+    checks.bolt && checks.bolt.status !== 'na'
+      ? { text: `site Ø${fdRound(checks.bolt.measured)} ${FD_MARK[checks.bolt.status]}`, colour: C[checks.bolt.status], size: tiny } : null,
+  ].filter(Boolean);
+  out.push(fdText(bxr + 8, yA + F * 0.4, bLines, 'start'));
+
+  // Captions under the side view (below whichever is lower: drawing or side labels)
+  const labelsBottom = yA + F * 0.4 + (Math.max(tLines.filter(Boolean).length, bLines.length) - 1) * LH;
+  let yc = Math.max(yBoltEnd, yNutEnd, labelsBottom) + LH + 12;
+  const caps = [];
+  if (rfh) caps.push(`Raised face Ø${fdRound(f.rf, 0)} × ${rfh} mm` + (f.family === 'ASME B16.5' ? ' (1/16")' : ' (EN 1092-1 f1)'));
+  else caps.push('Flat face shown (no raised face height known)');
+  if (f.thickness.length > 1) caps.push('Other types: ' + f.thickness.filter((t) => t !== tEntry).map((t) => `${fdShortType(t.label)} ${fdRound(t.mm)}`).join(', ') + ' mm');
+  caps.push('3 mm gasket · bolt length is an estimate');
+  out.push(fdText(cx, yc, caps.map((t) => ({ text: t, size: tiny, colour: C.muted }))));
+  yc += caps.length * LH + 8;
+
+  // Colour key
+  const key = [['good', 'in tolerance'], ['close', 'close'], ['bad', 'outside']];
+  const keyW = [7.2 * tiny, 4 * tiny, 4.5 * tiny];
+  let kx = cx - (keyW[0] + keyW[1] + keyW[2]) / 2;
+  key.forEach(([st, txt], i) => {
+    out.push(`<circle cx="${kx}" cy="${yc - tiny * 0.35}" r="${tiny * 0.35}" fill="${C[st]}"/>`);
+    out.push(fdText(kx + tiny * 0.7, yc, [{ text: txt, size: tiny, colour: C.muted }], 'start'));
+    kx += keyW[i];
+  });
+  const height = Math.ceil(yc + 16);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FD.width} ${height}" class="flange-drawing"` +
+    ` role="img" aria-label="Drawing of ${fdEsc(f.label)}" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">` +
+    `<defs><marker id="fdArrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">` +
+    `<path d="M0,1 L10,5 L0,9 z" fill="${C.dim}"/></marker></defs>` +
+    `<rect width="100%" height="100%" fill="#fff"/>` + out.join('') + `</svg>`;
+}
+
+if (typeof module !== 'undefined') module.exports = { drawFlange, fdHoleAngles, fdRaisedFaceHeight };
+
+</script>
+<script>
+/* =====================================================================
+ * flange-browse.js  —  "BROWSE STANDARDS" MODE
+ * ---------------------------------------------------------------------
+ * A reference catalogue: pick a standard (e.g. EN 1092-1 PN16 or
+ * BS 10 Table D), pick a size, and see every dimension, the drawing,
+ * flanges with the same drilling, and the whole range in one table.
+ *
+ * The file has two halves:
+ *   1. PURE FUNCTIONS  — take flange data in, give text/HTML out.
+ *      No web page needed, so tests.js can check them in Node.
+ *   2. SCREEN CODE     — initBrowse() wires the drop-downs and buttons
+ *      on the page to those functions. Only runs in a browser.
+ *
+ * It re-uses the data from flange-data.js and the helpers in
+ * flange-logic.js (round, inchFraction, chordFromPcd, boltLength ...)
+ * and drawFlange() from flange-drawing.js. Nothing is copied.
+ * ===================================================================== */
+
+// In a browser, flange-logic.js has already been loaded, so its functions
+// are simply there. In Node (the tests) we have to require() them.
+const BL = (typeof module !== 'undefined' && typeof round === 'undefined')
+  ? require('./flange-logic.js')
+  : { round, inchFraction, chordFromPcd, boltLength, gasketInfo, sameDrilling, MM_PER_INCH };
+
+/* =====================================================================
+ * 1. PURE FUNCTIONS
+ * ===================================================================== */
+
+// The order standards appear in the first drop-down, grouped by family.
+// UK water favourites (EN PN16/PN10, BS 10 Table D) come near the top.
+const BROWSE_GROUPS = [
+  { label: 'EN 1092-1 steel (BS 4504 / DIN)', family: 'EN 1092-1' },
+  { label: 'EN 1092-2 ductile / cast iron',  family: 'EN 1092-2' },
+  { label: 'BS 10 (old imperial UK)',         family: 'BS 10' },
+  { label: 'ASME B16.5 (American)',           family: 'ASME B16.5' },
+];
+
+// Quick-pick buttons shown above the drop-downs (most used in UK water).
+const BROWSE_QUICK = [
+  { id: 'EN1092-1_PN16', text: 'PN16' },
+  { id: 'EN1092-1_PN10', text: 'PN10' },
+  { id: 'BS10_D',        text: 'Table D' },
+  { id: 'BS10_E',        text: 'Table E' },
+  { id: 'ASME_150',      text: 'Class 150' },
+];
+
+const BROWSE_DEFAULT = { tableId: 'EN1092-1_PN16', flangeId: 'EN1092-1_PN16_100' };
+
+// Make text safe to put inside HTML (stops "<" breaking the page).
+function bEsc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// Length in mm -> "220 mm", plus "(8 11/16")" for imperial standards or
+// when the user ticked "show inches".
+function bFmt(mm, f, showInch, dp = 1) {
+  if (mm === null || mm === undefined) return '—';
+  let s = `${BL.round(mm, dp)} mm`;
+  if (showInch || f.unit === 'in') s += ` <span class="rsub">(${BL.inchFraction(mm / BL.MM_PER_INCH)})</span>`;
+  return s;
+}
+
+// List of standards for drop-down 1: [{ group, items:[{id, text}] }]
+function browseStandards(tables) {
+  return BROWSE_GROUPS.map((g) => ({
+    group: g.label,
+    items: tables.filter((t) => t.family === g.family).map((t) => ({ id: t.id, text: `${t.family} ${t.rating}` })),
+  })).filter((g) => g.items.length);
+}
+
+// Every size in one standard, smallest first (drop-down 2 and the table).
+function browseSizes(flanges, tableId) {
+  return flanges.filter((f) => f.tableId === tableId).sort((a, b) => a.dn - b.dn);
+}
+
+// When you switch standard, keep the "same" size if it exists there,
+// otherwise the nearest DN. E.g. PN16 DN100 -> Table D 4" (≈DN100).
+function nearestSize(flanges, tableId, dn) {
+  const sizes = browseSizes(flanges, tableId);
+  if (!sizes.length) return null;
+  return sizes.reduce((best, f) => (Math.abs(f.dn - dn) < Math.abs(best.dn - dn) ? f : best), sizes[0]);
+}
+
+// Step to the previous (-1) or next (+1) size, stopping at the ends.
+function stepSize(flanges, flangeId, step) {
+  const f = flanges.find((x) => x.id === flangeId);
+  if (!f) return null;
+  const sizes = browseSizes(flanges, f.tableId);
+  const i = sizes.indexOf(f) + step;
+  return sizes[Math.max(0, Math.min(sizes.length - 1, i))];
+}
+
+// Other flanges (any standard) that bolt straight on: same OD, PCD, bolt count.
+function sameDrillingAs(flanges, f) {
+  return flanges.filter((x) => x.id !== f.id && BL.sameDrilling(x, f));
+}
+
+// The classic trap: same number of bolts and a PCD within 4 mm, but NOT
+// the same drilling (e.g. BS 10 Table E 4" on 177.8 PCD vs PN16 DN100 on
+// 180). They look the same on site but the bolts won't line up properly.
+function lookAlikes(flanges, f) {
+  return flanges.filter((x) => x.id !== f.id && x.n === f.n &&
+    Math.abs(x.pcd - f.pcd) <= 4 && !BL.sameDrilling(x, f));
+}
+
+// Small clickable chips for a list of flanges (tap = compare with it).
+function chipList(list) {
+  return list.map((x) => `<button type="button" class="drawbtn" data-cmp="${bEsc(x.id)}">${bEsc(x.label)}</button>`).join('');
+}
+
+// The full details card for one flange (HTML text).
+function browseDetailsHTML(f, flanges, showInch = false) {
+  const bl = BL.boltLength(f);                 // no site thickness: uses the thickest type
+  const gk = BL.gasketInfo(f);
+  const chord = BL.chordFromPcd(f.pcd, f.n);
+  const twins = sameDrillingAs(flanges, f);
+  const alikes = lookAlikes(flanges, f);
+  const thick = f.thickness.map((t) => `${bFmt(t.mm, f, showInch)} – ${bEsc(t.label)}`).join('<br>') || '—';
+
+  return `
+  <div class="rtitle">${bEsc(f.label)}</div>
+  <div class="rsub">${bEsc(f.material)}${f.aliases.length ? ' · also called ' + bEsc(f.aliases.slice(0, 3).join(', ')) : ''}</div>
+  ${f.flags.map((fl) => `<div class="flag">⚠ Not fully verified: ${bEsc(fl)}</div>`).join('')}
+  ${twins.length ? `<div class="twin"><b>Same drilling as</b> (they bolt together; tap one to compare):
+      <div class="drawbtns">${chipList(twins)}</div></div>` : ''}
+  ${alikes.length ? `<div class="flag"><b>Looks similar but is NOT the same drilling</b> (bolt count matches, PCD within 4 mm):
+      <div class="drawbtns">${chipList(alikes)}</div></div>` : ''}
+  <table class="spec">
+    <tr><th>Nominal size</th><td>DN${f.dn}${f.nps ? ` / ${bEsc(f.nps)}"` : ''}</td></tr>
+    <tr><th>Outside diameter (D)</th><td>${bFmt(f.od, f, showInch)}${f.odAlt.length ? ` or ${bFmt(f.odAlt[0], f, showInch)} (ductile iron)` : ''}</td></tr>
+    <tr><th>PCD (K)</th><td>${bFmt(f.pcd, f, showInch)}</td></tr>
+    <tr><th>Bolts</th><td><b>${f.n} × ${bEsc(f.bolt)}</b>${f.nAlt.length ? ` (or ${f.nAlt.join('/')} holes)` : ''}</td></tr>
+    <tr><th>Bolt hole (L)</th><td>${bFmt(f.hole, f, showInch)}</td></tr>
+    <tr><th>Adjacent bolt centres</th><td>${bFmt(chord, f, showInch)} <span class="rsub">= PCD × sin(180°/${f.n})</span></td></tr>
+    <tr><th>Flange thickness</th><td>${thick}</td></tr>
+    <tr><th>Raised face Ø (d1)</th><td>${f.rf ? bFmt(f.rf, f, showInch, 0) : '— (flat face)'}</td></tr>
+    <tr><th>Pipe OD</th><td>${bFmt(f.pipeOD, f, showInch)}</td></tr>
+    <tr><th>Bolt length (estimate)</th><td>${bl ? `${f.n} × ${bEsc(f.bolt)} × ${bl.bolt} mm bolts, or ${bl.stud} mm studs
+        <div class="note">Flange to flange of the same type, ${bl.thicknessUsed} mm thick, 3 mm gasket. Check against the actual fitting.</div>` : '—'}</td></tr>
+    <tr><th>Gasket (estimate)</th><td>${bEsc(gk.text)}</td></tr>
+  </table>
+  ${f.notes.map((n) => `<div class="note">• ${bEsc(n)}</div>`).join('')}
+  <div class="note">Source: ${bEsc(f.sources.join('; '))}</div>`;
+}
+
+// The whole range for one standard as a compact table. The selected row
+// gets class="sel"; every row carries data-id so a tap can select it.
+function browseRangeHTML(flanges, tableId, selectedId) {
+  const rows = browseSizes(flanges, tableId);
+  if (!rows.length) return '<div class="empty">No sizes</div>';
+  const inch = rows[0].unit === 'in';
+  const c = (mm) => (mm === null || mm === undefined ? '—'
+    : inch ? `${BL.round(mm)}<small>${BL.inchFraction(mm / BL.MM_PER_INCH)}</small>` : BL.round(mm));
+  const head = ['Size', 'OD', 'PCD', 'Bolts', 'Hole', 'Chord', 'Thk', 'RF Ø'];
+  return `<table class="data range"><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>
+    ${rows.map((f) => `<tr data-id="${bEsc(f.id)}"${f.id === selectedId ? ' class="sel"' : ''}>
+      <td>${f.flags.length ? '⚠' : ''}${bEsc(f.sizeLabel)}</td><td>${c(f.od)}</td><td>${c(f.pcd)}</td>
+      <td>${f.n}×${bEsc(f.bolt)}</td><td>${c(f.hole)}</td><td>${BL.round(BL.chordFromPcd(f.pcd, f.n))}</td>
+      <td>${f.thickness.length ? BL.round(Math.max(...f.thickness.map((t) => t.mm))) : '—'}</td><td>${c(f.rf)}</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+// Side-by-side comparison of two flanges. Values that differ get
+// class="diff" (highlighted), and a one-line verdict says whether they
+// will bolt together.
+function compareHTML(a, b) {
+  const num = (x) => (x === null || x === undefined ? null : x);
+  const maxT = (f) => (f.thickness.length ? Math.max(...f.thickness.map((t) => t.mm)) : null);
+  const rows = [
+    ['Size', a.sizeLabel, b.sizeLabel, false],
+    ['OD', num(a.od), num(b.od), true],
+    ['PCD', num(a.pcd), num(b.pcd), true],
+    ['Bolts', a.n, b.n, true],
+    ['Bolt size', a.bolt, b.bolt, false],
+    ['Hole Ø', num(a.hole), num(b.hole), true],
+    ['Bolt centres', BL.chordFromPcd(a.pcd, a.n), BL.chordFromPcd(b.pcd, b.n), true],
+    ['Thickness', maxT(a), maxT(b), true],
+    ['Raised face Ø', num(a.rf), num(b.rf), true],
+    ['Pipe OD', num(a.pipeOD), num(b.pipeOD), true],
+  ];
+  // Numbers count as "different" if more than 0.5 mm apart.
+  const differs = (x, y, isNum) => (isNum && x !== null && y !== null ? Math.abs(x - y) > 0.5 : String(x) !== String(y));
+  const show = (x, isNum) => (x === null ? '—' : isNum && typeof x === 'number' && !Number.isInteger(x) ? BL.round(x) : bEsc(x));
+
+  // Verdict: does the bolt pattern line up?
+  let verdict;
+  if (BL.sameDrilling(a, b)) {
+    verdict = `<div class="vgood">✓ Same drilling — these bolt together.${Math.abs(a.hole - b.hole) > 0.5 ? ' (Hole sizes differ slightly.)' : ''}</div>`;
+  } else {
+    const why = [];
+    if (a.n !== b.n) why.push(`${a.n} vs ${b.n} bolts`);
+    if (Math.abs(a.pcd - b.pcd) > 0.5) why.push(`PCD ${BL.round(a.pcd)} vs ${BL.round(b.pcd)} mm`);
+    if (Math.abs(a.od - b.od) > 0.5) why.push(`OD ${BL.round(a.od)} vs ${BL.round(b.od)} mm`);
+    if (!why.length) why.push('bolt holes differ');
+    verdict = `<div class="vbad">✗ Not the same drilling: ${bEsc(why.join(', '))}.</div>`;
+  }
+  return `${verdict}
+  <table class="data cmp"><thead><tr><th></th><th>${bEsc(a.family + ' ' + a.rating)}</th><th>${bEsc(b.family + ' ' + b.rating)}</th></tr></thead><tbody>
+  ${rows.map(([name, x, y, isNum]) => `<tr${differs(x, y, isNum) ? ' class="diff"' : ''}><th>${name}</th><td>${show(x, isNum)}</td><td>${show(y, isNum)}</td></tr>`).join('')}
+  </tbody></table>
+  <div class="note">All values mm. Highlighted rows differ. Thickness = thickest listed type.</div>`;
+}
+
+/* =====================================================================
+ * 2. SCREEN CODE (browser only)
+ * ---------------------------------------------------------------------
+ * state = what is selected. It is saved in localStorage so the app opens
+ * where you left it next time.
+ * ===================================================================== */
+const BROWSE_KEY = 'flangeIdentifier.browse';
+
+function loadBrowseState() {
+  try { return JSON.parse(localStorage.getItem(BROWSE_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveBrowseState(state) {
+  try { localStorage.setItem(BROWSE_KEY, JSON.stringify(state)); } catch (e) { /* private mode: ignore */ }
+}
+
+// flanges = every flange (expandTables output), tables = FLANGE_TABLES.
+function initBrowse(flanges, tables) {
+  const $ = (id) => document.getElementById(id);
+  const byId = (id) => flanges.find((f) => f.id === id);
+  const saved = loadBrowseState();
+  const state = {
+    flangeId: byId(saved.flangeId) ? saved.flangeId : BROWSE_DEFAULT.flangeId,
+    cmpId: byId(saved.cmpId) ? saved.cmpId : null,
+    showInch: !!saved.showInch,
+  };
+
+  // Fill drop-down 1 (standards), grouped with <optgroup>.
+  const stdOptions = browseStandards(tables).map((g) =>
+    `<optgroup label="${bEsc(g.group)}">${g.items.map((i) => `<option value="${i.id}">${bEsc(i.text)}</option>`).join('')}</optgroup>`).join('');
+  $('bStd').innerHTML = stdOptions;
+  $('cStd').innerHTML = '<option value="">— nothing —</option>' + stdOptions;
+  $('bQuick').innerHTML = BROWSE_QUICK.map((q) => `<button type="button" class="drawbtn" data-std="${q.id}">${q.text}</button>`).join('');
+  $('bShowInch').checked = state.showInch;
+
+  // Fill a size drop-down for one standard.
+  function fillSizes(selectEl, tableId, selectedId) {
+    selectEl.innerHTML = browseSizes(flanges, tableId).map((f) =>
+      `<option value="${f.id}"${f.id === selectedId ? ' selected' : ''}>${bEsc(f.sizeLabel)}${f.nps ? ` (≈DN${f.dn})` : ''}${f.flags.length ? ' ⚠' : ''}</option>`).join('');
+  }
+
+  // Redraw everything from `state`. Called after every change.
+  function render() {
+    const f = byId(state.flangeId);
+    $('bStd').value = f.tableId;
+    fillSizes($('bSize'), f.tableId, f.id);
+    const sizes = browseSizes(flanges, f.tableId);
+    $('bPrev').disabled = sizes[0] === f;
+    $('bNext').disabled = sizes[sizes.length - 1] === f;
+    document.querySelectorAll('#bQuick .drawbtn').forEach((b) => b.classList.toggle('on', b.dataset.std === f.tableId));
+
+    $('bDetails').innerHTML = browseDetailsHTML(f, flanges, state.showInch);
+
+    // The drawing: same function as Identify mode, but no site values.
+    $('bDrawing').innerHTML = drawFlange(f, {
+      showInch: state.showInch, bolt: BL.boltLength(f), compact: $('bDrawing').clientWidth < 520,
+    });
+
+    // Range table, then scroll the box (not the page) to the selected row.
+    $('bRange').innerHTML = browseRangeHTML(flanges, f.tableId, f.id);
+    $('bRangeTitle').textContent = `${f.family} ${f.rating} — all sizes`;
+    const box = $('bRange'), row = box.querySelector('tr.sel');
+    if (row && (row.offsetTop < box.scrollTop + 30 || row.offsetTop > box.scrollTop + box.clientHeight - 30)) {
+      box.scrollTop = row.offsetTop - box.clientHeight / 2;
+    }
+
+    // Compare (optional)
+    const c = state.cmpId && byId(state.cmpId);
+    $('cStd').value = c ? c.tableId : '';
+    $('cSize').hidden = !c;
+    if (c) {
+      fillSizes($('cSize'), c.tableId, c.id);
+      $('cOut').innerHTML = compareHTML(f, c);
+    } else {
+      $('cOut').innerHTML = '<div class="note">Pick a second standard to see two flanges side by side — e.g. PN16 against BS 10 Table D.</div>';
+    }
+    saveBrowseState(state);
+  }
+
+  // Exposed so index.html can redraw when the mode tab is opened / resized.
+  initBrowse.render = render;
+  initBrowse.select = (id) => { if (byId(id)) { state.flangeId = id; render(); } };
+
+  // --- wire up the controls ---
+  $('bStd').addEventListener('change', () => {
+    state.flangeId = nearestSize(flanges, $('bStd').value, byId(state.flangeId).dn).id; render();
+  });
+  $('bQuick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-std]');
+    if (b) { state.flangeId = nearestSize(flanges, b.dataset.std, byId(state.flangeId).dn).id; render(); }
+  });
+  $('bSize').addEventListener('change', () => { state.flangeId = $('bSize').value; render(); });
+  $('bPrev').addEventListener('click', () => { state.flangeId = stepSize(flanges, state.flangeId, -1).id; render(); });
+  $('bNext').addEventListener('click', () => { state.flangeId = stepSize(flanges, state.flangeId, +1).id; render(); });
+  $('bShowInch').addEventListener('change', () => { state.showInch = $('bShowInch').checked; render(); });
+  $('bRange').addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-id]');
+    if (tr) { state.flangeId = tr.dataset.id; render(); }
+  });
+  $('cStd').addEventListener('change', () => {
+    const t = $('cStd').value;
+    state.cmpId = t ? nearestSize(flanges, t, byId(state.flangeId).dn).id : null; render();
+  });
+  $('cSize').addEventListener('change', () => { state.cmpId = $('cSize').value; render(); });
+  // "Same drilling as" / "looks similar" chips: tap = compare with that one.
+  $('bDetails').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cmp]');
+    if (b) { state.cmpId = b.dataset.cmp; render(); $('cCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  });
+}
+
+// Make the pure functions available to the Node tests.
+if (typeof module !== 'undefined') {
+  module.exports = {
+    browseStandards, browseSizes, nearestSize, stepSize, sameDrillingAs, lookAlikes,
+    browseDetailsHTML, browseRangeHTML, compareHTML, BROWSE_DEFAULT,
+  };
+}
+
+</script>
+<script>
+/* =====================================================================
+ * SCREEN CODE: read the inputs, call identify(), draw the results.
+ * ===================================================================== */
+
+const ALL_FLANGES = expandTables(FLANGE_TABLES);           // every flange, in mm
+const FAMILIES = [...new Set(FLANGE_TABLES.map((t) => t.family))];
+let inputUnit = 'mm';     // 'mm' or 'in' — what the user typed in
+let tolFactor = 1;
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------- formatting helpers ---------- */
+// Length in mm -> text, with inches added when useful.
+function fmt(mm, flange, dp = 1) {
+  if (mm === null || mm === undefined) return '—';
+  const showInch = flange.unit === 'in' || $('showInch').checked;
+  let s = `${round(mm, dp)} mm`;
+  if (showInch) s += ` <span class="rsub">(${inchFraction(mm / MM_PER_INCH)})</span>`;
+  return s;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+/* ---------- read the form ---------- */
+function readNumber(id) {
+  const v = parseFloat($(id).value);
+  if (isNaN(v) || v <= 0) return undefined;
+  return inputUnit === 'in' ? v * MM_PER_INCH : v;   // always work in mm inside
+}
+function readMeasurements() {
+  const nVal = parseInt($('n').value, 10);
+  return {
+    od: readNumber('od'),
+    n: nVal > 0 ? nVal : undefined,
+    chord: readNumber('chord'),
+    pcd: readNumber('pcd'),
+    hole: readNumber('hole'),
+    boltDia: $('bolt').value ? boltDiameterMm($('bolt').value) : undefined,
+    thickness: readNumber('thk'),
+    rf: readNumber('rf'),
+    pipeOD: readNumber('pipe'),
+  };
+}
+
+/* ---------- draw one result card ---------- */
+function scoreColour(s) { return s >= 85 ? 'var(--good)' : s >= 65 ? 'var(--close)' : 'var(--bad)'; }
+function confidence(s, fields) {
+  if (fields < 6) return 'too few measurements to be sure';
+  return s >= 90 ? 'strong match' : s >= 75 ? 'good match' : s >= 60 ? 'possible' : 'weak';
+}
+
+function renderGroup(g, rank, m) {
+  const r = g.best, f = r.flange;
+  const titles = g.items.map((i) => esc(i.flange.label)).join('<br>');
+  const bl = boltLength(f, m.thickness);
+  const gk = gasketInfo(f);
+  const chordStd = chordFromPcd(f.pcd, f.n);
+
+  // Which flanges in this group (for the thickness row we list each one).
+  const thicknessRows = g.items.map((i) => {
+    const t = i.flange.thickness.map((x) => `${fmt(x.mm, i.flange)} – ${esc(x.label)}`).join('<br>') || '—';
+    return g.items.length > 1 ? `<b>${esc(i.flange.rating)} ${esc(i.flange.family)}:</b><br>${t}` : t;
+  }).join('<br>');
+
+  const flags = [...new Set(g.items.flatMap((i) => i.flange.flags.map((fl) => `${i.flange.family} ${i.flange.rating}: ${fl}`)))];
+  const notes = [...new Set(g.items.flatMap((i) => i.flange.notes))];
+  const aliases = [...new Set(g.items.flatMap((i) => i.flange.aliases))];
+
+  return `
+  <div class="result ${rank === 0 ? 'top' : ''}">
+    <div class="rhead">
+      <div><div class="rtitle">${rank + 1}. ${titles}</div>
+        <div class="rsub">${esc(f.material)}${aliases.length ? ' · also called ' + esc(aliases.slice(0, 3).join(', ')) : ''}</div></div>
+      <div class="score" style="color:${scoreColour(r.score)}">${r.score}%</div>
+    </div>
+    <div class="bar"><span style="width:${r.score}%;background:${scoreColour(r.score)}"></span></div>
+    <div class="rsub">${confidence(r.score, r.fieldsCompared)}</div>
+    <div class="drawbtns">${g.items.map((i) => `<button type="button" class="drawbtn${i.flange.id === selectedId ? ' on' : ''}"
+       data-id="${esc(i.flange.id)}">✎ Draw ${g.items.length > 1 ? esc(i.flange.family + ' ' + i.flange.rating) : 'this flange'}</button>`).join('')}</div>
+    ${g.twinNote ? `<div class="twin">${esc(g.twinNote)}</div>` : ''}
+    <ul class="why">${r.checks.map((c) => `<li class="${c.status}">${esc(c.text)}</li>`).join('')}</ul>
+    <details ${rank === 0 ? 'open' : ''}>
+      <summary>Full standard details</summary>
+      <table class="spec">
+        <tr><th>Nominal size</th><td>DN${f.dn}${f.nps ? ` / ${esc(f.nps)}"` : ''}</td></tr>
+        <tr><th>Outside diameter (D)</th><td>${fmt(f.od, f)}${f.odAlt.length ? ` or ${fmt(f.odAlt[0], f)} (ductile iron)` : ''}</td></tr>
+        <tr><th>PCD (K)</th><td>${fmt(f.pcd, f)}</td></tr>
+        <tr><th>Bolts</th><td>${f.n} × ${esc(f.bolt)}${f.nAlt.length ? ` (or ${f.nAlt.join('/')} holes)` : ''}</td></tr>
+        <tr><th>Bolt hole (L)</th><td>${fmt(f.hole, f)}</td></tr>
+        <tr><th>Adjacent bolt centres</th><td>${fmt(chordStd, f)}</td></tr>
+        <tr><th>Flange thickness</th><td>${thicknessRows}</td></tr>
+        <tr><th>Raised face Ø (d1)</th><td>${fmt(f.rf, f, 0)}</td></tr>
+        <tr><th>Pipe OD</th><td>${fmt(f.pipeOD, f)}</td></tr>
+        <tr><th>Suggested bolts</th><td>${bl ? `${f.n} × ${esc(f.bolt)} × ${bl.bolt} mm hex bolts, or studs ${bl.stud} mm long
+             <div class="note">Rough guide: 2 × ${bl.thicknessUsed} mm flange + 3 mm gasket + washers + nut + 2–3 threads. Check against the actual valve/fitting.</div>` : '—'}</td></tr>
+        <tr><th>Gasket</th><td>${esc(gk.text)}</td></tr>
+      </table>
+      ${notes.map((n) => `<div class="note">• ${esc(n)}</div>`).join('')}
+      ${flags.map((fl) => `<div class="flag">⚠ ${esc(fl)}</div>`).join('')}
+      <div class="note">Source: ${esc(f.sources.join('; '))}</div>
+    </details>
+  </div>`;
+}
+
+/* ---------- the drawing ----------
+ * selectedId = the flange the user tapped "Draw" on. If it is no longer in
+ * the results (measurements changed), we fall back to the top match.
+ */
+let selectedId = null;
+let lastResults = [];      // every scored flange from the last update, for lookup by id
+let lastMeasurements = {};
+
+function showDrawing() {
+  const card = $('drawingCard');
+  if (!lastResults.length) { card.hidden = true; return; }
+  const pick = lastResults.find((r) => r.flange.id === selectedId) || lastResults[0];
+  selectedId = pick.flange.id;
+  const f = pick.flange;
+  card.hidden = false;      // show the card first, so its width can be measured
+  $('drawing').innerHTML = drawFlange(f, {
+    checks: pick.checks,                               // site values + colours
+    showInch: $('showInch').checked,
+    bolt: boltLength(f, lastMeasurements.thickness),   // estimated bolt length
+    compact: $('drawing').clientWidth < 520,           // phone: bigger text
+  });
+  $('drawingWhich').textContent = pick === lastResults[0] ? '— top match' : '— selected';
+  card.hidden = false;
+  document.querySelectorAll('.drawbtn').forEach((b) => b.classList.toggle('on', b.dataset.id === selectedId));
+}
+
+/* ---------- main update: runs on every keystroke ---------- */
+function update() {
+  const m = readMeasurements();
+
+  // Show the PCD worked out from the chord, if we have a bolt count.
+  if (m.chord && m.n) {
+    const pcd = pcdFromChord(m.chord, m.n);
+    $('chordOut').innerHTML = `PCD = chord ÷ sin(180°/${m.n}) = <b>${round(pcd)} mm</b> (${inchFraction(pcd / MM_PER_INCH)})`;
+  } else if (m.chord) {
+    $('chordOut').textContent = 'Enter the number of bolts to work out the PCD (the matcher will still try every bolt count).';
+  } else {
+    $('chordOut').textContent = '';
+  }
+
+  const families = [...document.querySelectorAll('#famChecks input:checked')].map((c) => c.value);
+  const groups = identify(ALL_FLANGES, m, { tolFactor, families });
+  const out = $('results');
+  if (!Object.values(m).some((v) => v !== undefined)) {
+    out.innerHTML = '<div class="empty">Start typing measurements — results update as you go.<br>OD + number of bolts + bolt spacing is usually enough.</div>';
+  } else if (!groups.length) {
+    out.innerHTML = '<div class="empty">No good match. Check the measurements and units, try “Loose” tolerance, or tick more standards.</div>';
+  } else {
+    out.innerHTML = groups.map((g, i) => renderGroup(g, i, m)).join('');
+  }
+  lastResults = groups.flatMap((g) => g.items);
+  lastMeasurements = m;
+  showDrawing();
+}
+
+/* ---------- Identify / Browse mode switch ---------- */
+const MODE_KEY = 'flangeIdentifier.mode';
+let mode = 'identify';
+function setMode(m) {
+  mode = m === 'browse' ? 'browse' : 'identify';
+  $('identifyMain').hidden = mode !== 'identify';
+  $('browseMain').hidden = mode !== 'browse';
+  document.querySelectorAll('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+  try { localStorage.setItem(MODE_KEY, mode); } catch (e) { /* ignore */ }
+  // Redraw now the section is visible (drawings size themselves to their box).
+  if (mode === 'browse') initBrowse.render(); else showDrawing();
+}
+
+/* ---------- wire everything up ---------- */
+function init() {
+  // Standard family tick boxes
+  $('famChecks').innerHTML = FAMILIES.map((fam) =>
+    `<label><input type="checkbox" value="${esc(fam)}" checked> ${esc(fam)}</label>`).join('');
+
+  // Browse standards mode (flange-browse.js)
+  initBrowse(ALL_FLANGES, FLANGE_TABLES);
+
+  // Re-run the match whenever anything changes
+  // New measurements = new results, so go back to drawing the top match.
+  const onEdit = () => { selectedId = null; update(); };
+  document.querySelectorAll('#inputs input, #inputs select').forEach((el) => {
+    if (el.id === 'showInch') return;          // handled below; keeps the selected drawing
+    el.addEventListener('input', onEdit);
+    el.addEventListener('change', onEdit);
+  });
+
+  // mm / inch switch
+  document.querySelectorAll('#unitSeg button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('#unitSeg button').forEach((x) => x.classList.toggle('on', x === b));
+    inputUnit = b.dataset.unit;
+    update();
+  }));
+
+  // tolerance switch
+  document.querySelectorAll('#tolSeg button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('#tolSeg button').forEach((x) => x.classList.toggle('on', x === b));
+    tolFactor = parseFloat(b.dataset.tol);
+    update();
+  }));
+
+  $('showInch').addEventListener('change', update);
+
+  // Redraw when the screen size changes (e.g. phone turned sideways).
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => (mode === 'browse' ? initBrowse.render() : showDrawing()), 150);
+  });
+
+  // "Draw" buttons are re-created on every update, so listen on the results box instead.
+  $('results').addEventListener('click', (e) => {
+    const btn = e.target.closest('.drawbtn');
+    if (!btn) return;
+    selectedId = btn.dataset.id;
+    showDrawing();
+    $('drawingCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  $('clearBtn').addEventListener('click', () => {
+    ['od', 'n', 'chord', 'pcd', 'hole', 'thk', 'rf', 'pipe'].forEach((id) => { $(id).value = ''; });
+    $('bolt').value = '';
+    update();
+  });
+
+  // Example: a DN100 PN16 measured with a tape — OD, bolt count, chord and bolt size.
+  $('exampleBtn').addEventListener('click', () => {
+    document.querySelector('#unitSeg button[data-unit="mm"]').click();
+    $('od').value = 221; $('n').value = 8; $('chord').value = 69; $('pcd').value = '';
+    $('hole').value = 18; $('bolt').value = 'M16'; $('thk').value = 20;
+    update();
+  });
+
+  // Mode tabs. The last mode used is remembered in localStorage.
+  document.querySelectorAll('#modeSeg button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  let startMode = 'identify';
+  try { startMode = localStorage.getItem(MODE_KEY) || 'identify'; } catch (e) { /* ignore */ }
+  // Links: index.html#browse opens Browse; #browse=EN1092-1_PN16_100 also picks that flange.
+  if (location.hash.startsWith('#browse')) {
+    startMode = 'browse';
+    const id = location.hash.split('=')[1];
+    if (id) initBrowse.select(decodeURIComponent(id));
+  }
+  if (location.hash === '#example') startMode = 'identify';
+  setMode(startMode);
+
+  update();
+  // Opening the page as index.html#example fills in the example straight away.
+  if (location.hash === '#example') $('exampleBtn').click();
+}
+init();
+
+// Offline support when the app is hosted on a website (see sw.js).
+// Skipped when opened as a file or inside the Android app, which are offline anyway.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => { /* not critical */ });
+}
+</script>
+</body>
+</html>
