@@ -1,0 +1,774 @@
+/* =====================================================================
+ * pipe-data.js  —  THE PIPE AND COUPLING DATA  (Pipe Reference app)
+ * ---------------------------------------------------------------------
+ * Pure data, no logic. Logic lives in pipe-logic.js.
+ * Everything is inside ONE global object, PIPE_DATA, so this file can
+ * sit on the same page as Flange ID (flange-data.js) without clashes.
+ *
+ *   PIPE_DATA.sources    id -> { title, url }   (every value cites one)
+ *   PIPE_DATA.materials  pipe materials: coatings, linings, suitability
+ *   PIPE_DATA.series     one entry = one standard + one class/schedule/SDR
+ *   PIPE_DATA.peDnEquiv  PE OD -> "matching" DN (equivalent bore)
+ *   PIPE_DATA.couplings  couplings and flange adaptors with OD ranges
+ *   PIPE_DATA.services   the suitability headings
+ *
+ * SERIES ROWS
+ *   columns   names the values in each row, e.g. ['dn','od','wall']
+ *     dn    nominal size DN (mm). OD-sized plastics have no dn column;
+ *           pipe-logic.js works out a matching / similar DN instead.
+ *     nps   imperial nominal size text, e.g. '4"'
+ *     od    outside diameter, mm
+ *     wall  wall thickness, mm (null = the standard does not fix one)
+ *   wallBasis  'nominal' | 'minimum' | 'derived'  — what the wall means
+ *   unverified { key: why }  key = dn (or od for OD-sized series). These
+ *           rows get a ⚠ in the app. Never guess: null + a note instead.
+ *
+ * ID (bore) is never stored: the app calculates OD − 2 × wall and labels
+ * it "nominal". Linings (e.g. cement mortar) make the real bore smaller.
+ * ===================================================================== */
+
+const PIPE_DATA = (() => {
+
+  /* ------------------------------------------------------------------
+   * SOURCES — every table and product below points at one of these.
+   * All were opened and read on 26 Nov 2026.
+   * ------------------------------------------------------------------ */
+  const sources = {
+    en545: { title: 'BS EN 545:2010 Tables 9, 16, 17 and clause 4.5.2 (ductile iron, water)',
+      url: 'https://www.hawsd.com/d/files/bs-en-545-2010-ductile-iron-pipes,fittings,accessories-and-their-joints-for-water-pipelines-requirements-and-test-methods.pdf' },
+    eadips: { title: 'EADIPS handbook ch. 5, Table 5.1 — EN 545 minimum wall by C-class (cross-check)',
+      url: 'https://media.eadips.org/wp-content/downloads/handbuch-en/chap-05-wall-thickness-calculation.pdf' },
+    en598: { title: 'EN 598:2007+A1:2009 Table 11 (ductile iron, sewerage)',
+      url: 'https://www.gxpipetech.com/uploads/file/20250724/piping-solutions-bs-en-598-2007a1-2009.pdf' },
+    k9: { title: 'K9 class wall e = 9 × (0.5 + 0.001 DN), min 6 mm (ISO 2531 / EN 545:2006) — MESteel table',
+      url: 'https://mesteel.com/product-info/carbon-steel/ductile-iron-pipes/ductile-iron-pipe-diameters' },
+    k9b: { title: 'Electrotherm K7/K9 table (IS 8329) — K9 cross-check',
+      url: 'https://www.electrothermdipipe.com/technical-specification.html' },
+    b3610: { title: 'ASME B36.10M wall thickness table (LF Piping)',
+      url: 'https://www.lfpiping.com/wp-content/uploads/2023/07/Wall-Thickness-and-unit-weight-of-welded-and-seamless-wrought-steel-pipe-ASME-B36.10M.pdf' },
+    b3619: { title: 'ASME B36.19-2022 stainless pipe chart (Raykam)',
+      url: 'https://raykamalloys.com/wp-content/uploads/2023/02/ASME-B36.19-2022-Pipe-Size-Chart.pdf' },
+    en10255: { title: 'BS EN 10255 medium/heavy tube table (CMT Engineering)',
+      url: 'https://www.cmt-engineering.co.uk/wp-content/uploads/2019/04/BS-EN10255-dimensions.pdf' },
+    wask: { title: 'WASK Standard Outside Diameter Chart (EN 10220, imperial CI/AC BS 78/1211/486, GRP BS 5480, metric AC)',
+      url: 'https://www.wask-uk.com/app/uploads/2024/09/WASK-Standard-Outside-Diameter-Chart.pdf' },
+    iso1127: { title: 'DIN EN ISO 1127 Table 3 dimensions (RFF)',
+      url: 'https://www.rff.de/_uploads/files/produkte/Datenblaetter/rff_pipes_DIN-EN-ISO-1127_dimensions_stainless.pdf' },
+    en12201: { title: 'PE100 EN 12201-2 / ISO 4427 dimension table (Kontihidroplast)',
+      url: 'https://nmtester.com/kontihidroplast/wp-content/uploads/2024/08/pe-100-tabela-za-dimenzii-i-pritisoci-en.pdf' },
+    peDn: { title: 'PE OD → equivalent DN (HK WSD Table 22.09-2, via Mill-Pro)',
+      url: 'https://www.mill-pro.com.hk/water/od-dn-conversion-table/' },
+    en1452: { title: 'EN 1452 PVC-U dimensions (Engineering ToolBox)',
+      url: 'https://www.engineeringtoolbox.com/EN-1452-PVC-U-pipes-d_2142.html' },
+    en1401: { title: 'UNI EN 1401-1 PVC-U sewer pipe table (Lareter)',
+      url: 'https://lareter.it/pdf/tubi%20pvc%20fognatura/DisciplinareUNIEN1401.pdf' },
+    hepworth: { title: 'Hepworth (Wavin) clay pipe weights and dimensions, Mar 2020',
+      url: 'https://mediahub.wavin.com/m/4ec71850569904d4/original/Hepworth-Clay-pipe-weights-and-dimensions.pdf' },
+    vjMaxiFit: { title: 'Viking Johnson MaxiFit & MaxiFitXtra couplings datasheet (DN40–300)',
+      url: 'https://www.vikingjohnson.com/hr-hr/wp-content/uploads/2026/07/maxifit-xtra-ds-cec-011024-2.pdf' },
+    vjMaxiFitBrochure: { title: 'Viking Johnson MaxiFit brochure issue 9.1 (pipe materials, PE repair rule)',
+      url: 'https://www.vikingjohnson.com/wp-content/uploads/2026/07/MaxiFit_Brochure_ISSUE-9-1_0926_GB.pdf' },
+    vjMaxiFitLarge: { title: 'Viking Johnson MaxiFit large diameter couplings datasheet',
+      url: 'https://www.vikingjohnson.com/wp-content/uploads/2026/07/MaxiFit-Large-Dia-DS-C-011024.pdf' },
+    vjMaxiDaptor: { title: 'Viking Johnson MaxiDaptor flange adaptors datasheet',
+      url: 'https://www.vikingjohnson.com/wp-content/uploads/2026/07/MaxiDaptor-DS-FA-011024.pdf' },
+    vjUltraGripC: { title: 'Viking Johnson UltraGrip couplings datasheet',
+      url: 'https://www.vikingjohnson.com/wp-content/uploads/2026/07/UltraGrip-Couplings-DS-011024-3.pdf' },
+    vjUltraGripCPage: { title: 'Viking Johnson UltraGrip couplings product page (material caveats)',
+      url: 'https://www.vikingjohnson.com/product/ultragrip-couplings/' },
+    vjUltraGripFA: { title: 'Viking Johnson UltraGrip flange adaptors datasheet',
+      url: 'https://www.vikingjohnson.com/wp-content/uploads/2026/07/UltraGrip-FA-DS-011024.pdf' },
+    vjUltraGripFAPage: { title: 'Viking Johnson UltraGrip flange adaptors product page (material caveats)',
+      url: 'https://www.vikingjohnson.com/product/ultragrip-flange-adaptors/' },
+    vjAquaFastC: { title: 'Viking Johnson AquaFast couplings 63–315 mm datasheet',
+      url: 'https://www.vikingjohnson.com/wp-content/uploads/2026/07/AquaFast-Couplings-63mm-315mm-DS-011024.pdf' },
+    vjAquaFastFA: { title: 'Viking Johnson AquaFast flange adaptors 63–315 mm datasheet',
+      url: 'https://www.vikingjohnson.com/wp-content/uploads/2026/07/AquaFast-FA-63mm-315mm-DS-011024.pdf' },
+    avk601: { title: 'AVK UK Series 601 Universal Supa® straight coupling (601/A-006)',
+      url: 'https://www.avkuk.co.uk/en-gb/product-finder/couplings-adaptors/couplings/601-a-006' },
+    avk603: { title: 'AVK UK Series 603 Universal Supa® flange adaptor (603/A-002)',
+      url: 'https://www.avkuk.co.uk/en-gb/product-finder/couplings-adaptors/flange-adaptors/603-a-002' },
+    avk621: { title: 'AVK UK Series 621 Supa Plus® coupling, PE (621/48-001)',
+      url: 'https://www.avkuk.co.uk/en-gb/product-finder/couplings-adaptors/couplings/621-48-001' },
+    avk623: { title: 'AVK UK Series 623 Supa Plus™ flange adaptor, PE/PVC (623/10-001)',
+      url: 'https://www.avkuk.co.uk/en-gb/product-finder/couplings-adaptors/flange-adaptors/623-10-001' },
+    avk631: { title: 'AVK UK Series 631 Supa Maxi™ straight coupling (631/00-001)',
+      url: 'https://www.avkuk.co.uk/en-gb/product-finder/couplings-adaptors/couplings/631-00-001' },
+    avk633: { title: 'AVK UK Series 633 Supa Maxi™ flange adaptor (633/00-001)',
+      url: 'https://www.avkuk.co.uk/en-gb/product-finder/couplings-adaptors/flange-adaptors/633-00-001' },
+    avkRange: { title: 'AVK UK fittings measuring & technical information (range overview incl. 602 step couplings)',
+      url: 'https://www.avkuk.co.uk/-/media/websites/local-websites/avk-uk/files/downloads/product-information-and-cases/avk-fittings-measuring-and-technical-information.pdf?rev=aae9434eda2c43ee9d11cbf50300ea2a' },
+    straubGrip: { title: 'STRAUB-GRIP datasheet ø21.3–711.2 (Technical Manual 2019)',
+      url: 'https://www.straub.ch/fileadmin/Straub/Downloads/EN/Produkte/Grip-L/Datenblaetter/Datenblatt_TM2019_STRAUB-GRIP_21.3-711.2_stepped_48.3-168.3_en.pdf' },
+    straubFlex: { title: 'STRAUB-FLEX 1 / FLEX 2 datasheet',
+      url: 'https://straub.co.uk/pdf/datasheets/STRAUB%20Flex.pdf' },
+    teekay: { title: 'Teekay pipe couplings brochure (heco, 06.25): Axilock-S, Axilock, stepped coupling',
+      url: 'https://www.heco.de/cms/fileadmin/heco/Seiten/Wissenswertes/Downloads/Teekay_Prospekt_EN_06.25_WEB.pdf' },
+    guidance: { title: 'General guidance compiled for this app from the manufacturer pages above, EN 545/598 and common UK water-industry practice — not a standard',
+      url: '' },
+  };
+
+  /* Suitability headings (keys used in every material's `suit`). */
+  const services = [
+    { key: 'potable',      label: 'Drinking water (WRAS)' },
+    { key: 'raw',          label: 'Raw water' },
+    { key: 'sewage',       label: 'Sewage / wastewater' },
+    { key: 'abrasive',     label: 'Abrasive / slurry' },
+    { key: 'chemical',     label: 'Chemical / aggressive' },
+    { key: 'buried',       label: 'Buried' },
+    { key: 'aboveGround',  label: 'Above ground / UV' },
+    { key: 'contaminated', label: 'Contaminated land' },
+  ];
+
+  /* ------------------------------------------------------------------
+   * MATERIALS. suit: { key: [rating, note] }, rating = good|caution|bad
+   * Ratings are GENERAL GUIDANCE (source 'guidance') — always check the
+   * manufacturer's data and the WRAS / Reg 31 listing for the product.
+   * ------------------------------------------------------------------ */
+  const materials = [
+    { id: 'steel', name: 'Carbon steel', short: 'Steel', colour: '#5d6b7a', sizing: 'DN',
+      coatings: ['Hot-dip galvanised (EN 10255 tube to EN 10240)', 'Fusion-bonded epoxy (FBE)', '3-layer PE / PP factory coating for buried mains',
+        'Paint systems to ISO 12944 above ground', 'Legacy: bitumen / coal-tar enamel and wrapping'],
+      linings: ['Cement mortar lining', 'WRAS-listed epoxy / FBE lining', 'Unlined (process, air, sludge)'],
+      suit: {
+        potable: ['caution', 'Only with a WRAS-listed lining; bare steel corrodes and discolours water.'],
+        raw: ['caution', 'Needs a lining; check how aggressive the water is.'],
+        sewage: ['caution', 'Common in pumping stations, but septic sewage / H₂S corrodes it — coat and line it.'],
+        abrasive: ['good', 'Hard and thick-walled; can be rubber or PU lined for slurry.'],
+        chemical: ['caution', 'Depends on the chemical; usually needs a lining.'],
+        buried: ['caution', 'Needs a sound external coating, and cathodic protection on long mains.'],
+        aboveGround: ['good', 'UV is not a problem; keep the paint system maintained.'],
+        contaminated: ['good', 'Metal wall is impermeable to hydrocarbons; protect the coating.'],
+      },
+      notes: ['DN65 and DN125 differ between EN (76.1 / 139.7 mm) and ASME (73.0 / 141.3 mm) — measure the OD.'],
+      sources: ['guidance'] },
+
+    { id: 'stainless', name: 'Stainless steel (304 / 316)', short: 'Stainless', colour: '#7f97a8', sizing: 'DN',
+      coatings: ['Normally none — pickled and passivated', 'Wrapping / tape where buried'],
+      linings: ['None'],
+      suit: {
+        potable: ['good', 'Widely used in treatment works; use WRAS-listed fittings and seals.'],
+        raw: ['good', 'Good; watch high-chloride water (use 316).'],
+        sewage: ['caution', '316 usually fine; 304 can pit in septic / chloride-rich sewage.'],
+        abrasive: ['caution', 'Thin walls (10S, ISO 1127) wear through quickly.'],
+        chemical: ['caution', 'Good with many chemicals, poor with chlorides and strong hypochlorite.'],
+        buried: ['caution', 'Wrap it; chloride-bearing soils cause pitting.'],
+        aboveGround: ['good', 'No UV issue.'],
+        contaminated: ['good', 'Impermeable metal wall.'],
+      },
+      notes: ['Thin-wall stainless needs a coupling rated for it (e.g. AVK 601: 304/316 only with OD ≤ 304 mm and wall ≥ 2 mm).'],
+      sources: ['guidance', 'avk601'] },
+
+    { id: 'di', name: 'Ductile iron — water (EN 545)', short: 'DI water', colour: '#2f5d9a', sizing: 'DN',
+      coatings: ['Zinc ≥ 200 g/m² + finishing layer ≥ 70 µm (EN 545:2010 cl. 4.5.2.2)',
+        'Zinc-aluminium ≥ 400 g/m² + finishing layer for more aggressive soils (EN 545:2010)',
+        'Loose PE sleeving on site for aggressive ground', 'Factory PE or PU coating for very aggressive soils'],
+      linings: ['Cement mortar lining, nominal 4 mm DN40–300, 5 mm DN350–600, 6 mm DN700–1200 (EN 545:2010 Table 9)',
+        'Sulphate-resisting / blast-furnace cement mortar for soft or aggressive water'],
+      suit: {
+        potable: ['good', 'Standard UK water main material with cement-mortar lining (WRAS-listed products).'],
+        raw: ['good', 'Good; specify the lining for soft or aggressive water.'],
+        sewage: ['caution', 'Standard mortar lining can be attacked by septic sewage — use EN 598 sewer pipe.'],
+        abrasive: ['caution', 'Mortar lining erodes; use PU-lined pipe for grit or slurry.'],
+        chemical: ['caution', 'Check the lining and gasket against the chemical.'],
+        buried: ['good', 'Designed for burial; add PE sleeving or upgraded coating in aggressive soils.'],
+        aboveGround: ['caution', 'Needs a paint system; the standard finishing layer is not meant for UV.'],
+        contaminated: ['caution', 'Iron is impermeable, but EPDM joint gaskets let hydrocarbons through — use NBR / permeation-resistant gaskets.'],
+      },
+      notes: ['EN 545 C-class walls are MINIMUM iron thickness; real pipes are usually a little thicker.',
+        'Same OD (DE) series as EN 598 and ISO 2531, so DI pipes and fittings match by OD.'],
+      sources: ['en545', 'guidance'] },
+
+    { id: 'dis', name: 'Ductile iron — sewer (EN 598)', short: 'DI sewer', colour: '#8b3a3a', sizing: 'DN',
+      coatings: ['Zinc + red/brown epoxy finishing layer (typical maker practice)', 'PE sleeving for aggressive ground'],
+      linings: ['High-alumina cement mortar (typical)', 'Polyurethane lining for aggressive effluent or abrasion'],
+      suit: {
+        potable: ['bad', 'Sewer pipe — not for drinking water.'],
+        raw: ['caution', 'Not normally used for raw water mains.'],
+        sewage: ['good', 'Made for gravity and pressure sewers.'],
+        abrasive: ['caution', 'PU lining recommended for grit / abrasive flows.'],
+        chemical: ['caution', 'High-alumina mortar resists normal sewage; use PU lining for industrial effluent.'],
+        buried: ['good', 'Designed for burial.'],
+        aboveGround: ['caution', 'Needs paint for UV / appearance.'],
+        contaminated: ['caution', 'As DI water pipe — check gasket permeation.'],
+      },
+      notes: ['Coatings / linings listed are typical maker practice, not quoted from EN 598 — check the manufacturer.'],
+      sources: ['en598', 'guidance'] },
+
+    { id: 'ci', name: 'Cast iron — imperial (BS 78 / BS 1211)', short: 'Imperial CI', colour: '#6b4f3a', sizing: 'DN',
+      coatings: ['Coal-tar / bitumen dip (historical)'],
+      linings: ['Usually unlined or bitumen — often tubercled', 'Some mains relined in situ (cement or epoxy)'],
+      suit: {
+        potable: ['caution', 'Legacy main still in service — repair / connect only; unlined pipe gives discoloured water.'],
+        raw: ['caution', 'Legacy only.'],
+        sewage: ['caution', 'Legacy sewers and rising mains; corrosion from septic sewage.'],
+        abrasive: ['caution', 'Brittle grey iron — avoid.'],
+        chemical: ['caution', 'Grey iron corrodes in acids.'],
+        buried: ['caution', 'Graphitic corrosion and brittle fracture; do not over-torque couplings.'],
+        aboveGround: ['caution', 'Legacy only.'],
+        contaminated: ['caution', 'Old lead-run or rubber joints may let contaminants in.'],
+      },
+      notes: ['Class A/B and Class C/D have different ODs from 12" upward — measure the OD before ordering.',
+        'Wall thickness is not listed here (class-dependent; no reliable source found).'],
+      sources: ['wask', 'guidance'] },
+
+    { id: 'ac', name: 'Asbestos cement (AC)', short: 'AC', colour: '#8f8f7a', sizing: 'DN',
+      coatings: ['None / bitumen dip'], linings: ['None'],
+      suit: {
+        potable: ['caution', 'Legacy only — no new installation (asbestos banned in the UK since 1999).'],
+        raw: ['caution', 'Legacy only.'],
+        sewage: ['caution', 'Attacked by acidic / septic sewage.'],
+        abrasive: ['bad', 'Erodes.'],
+        chemical: ['bad', 'Attacked by acids and soft water.'],
+        buried: ['caution', 'Softens in acidic soils and soft water; brittle.'],
+        aboveGround: ['caution', 'Legacy only.'],
+        contaminated: ['caution', 'Legacy only.'],
+      },
+      notes: ['ASBESTOS: work to the Control of Asbestos Regulations 2012 — no power cutting, wet methods, licensed disposal.',
+        'Turned ends on imperial AC match imperial cast iron ODs (Class A/B, C/D); metric AC (BS 486) uses Class 15/20/25 ODs.',
+        'UltraGrip on AC: remove the grippers — it becomes a flexible (unrestrained) joint.'],
+      sources: ['wask', 'vjUltraGripCPage', 'guidance'] },
+
+    { id: 'pe', name: 'Polyethylene PE100 / PE80', short: 'PE', colour: '#1f6fd1', sizing: 'OD',
+      coatings: ['None (blue = water, black = other, black/brown = sewer, yellow = gas)', 'Peelable PP protective skin for trenchless / sand-free laying',
+        'Barrier pipe (PE / aluminium / PE) for contaminated land'],
+      linings: ['None'],
+      suit: {
+        potable: ['good', 'Blue PE to EN 12201 is widely WRAS / Reg 31 approved.'],
+        raw: ['good', 'Good.'],
+        sewage: ['good', 'Black or brown PE for pressure sewers and rising mains.'],
+        abrasive: ['good', 'PE has very good abrasion resistance for slurries.'],
+        chemical: ['good', 'Wide chemical resistance; check the chemical resistance tables.'],
+        buried: ['good', 'Flexible; fused joints are end-load resistant.'],
+        aboveGround: ['caution', 'Blue PE is not UV-stable — sleeve or cover it; black PE is UV-stabilised.'],
+        contaminated: ['bad', 'Hydrocarbons permeate standard PE — use barrier pipe.'],
+      },
+      notes: ['PE is sized by OUTSIDE diameter; walls are set by the SDR (SDR11 ≈ OD ÷ 11).',
+        'PE80 pipe of the same OD and SDR has the same dimensions as PE100 but a lower pressure rating.',
+        'In mechanical couplings PE usually needs an insert / support liner and an end-load-resistant (gripping) design.'],
+      sources: ['en12201', 'guidance'] },
+
+    { id: 'pvc', name: 'PVC-U pressure (EN 1452 / BS 3505)', short: 'PVC-U', colour: '#6a7480', sizing: 'OD',
+      coatings: ['None'], linings: ['None'],
+      suit: {
+        potable: ['good', 'Long-established for water mains; WRAS-listed products available.'],
+        raw: ['good', 'Good.'],
+        sewage: ['caution', 'Used for rising mains, but surge / fatigue cracking is a risk.'],
+        abrasive: ['caution', 'Moderate abrasion resistance.'],
+        chemical: ['good', 'Good with many acids and alkalis; attacked by some solvents.'],
+        buried: ['good', 'Good with correct bedding; brittle when cold or damaged.'],
+        aboveGround: ['caution', 'UV embrittlement — protect it.'],
+        contaminated: ['caution', 'Some solvents (chlorinated, aromatic) attack PVC.'],
+      },
+      notes: ['Metric PVC-U is OD-sized like PE; older UK BS 3505 pipe uses imperial ODs (114.3, 168.3 …).',
+        'UltraGrip: only PVC-U 10–16 bar classes. AquaFast: metric PVC-U (10 bar) without a liner.'],
+      sources: ['en1452', 'wask', 'vjUltraGripCPage', 'vjAquaFastC', 'guidance'] },
+
+    { id: 'pvcs', name: 'PVC-U sewer (EN 1401)', short: 'PVC sewer', colour: '#b5652a', sizing: 'OD',
+      coatings: ['None (orange-brown)'], linings: ['None'],
+      suit: {
+        potable: ['bad', 'Non-pressure drainage pipe.'],
+        raw: ['bad', 'Non-pressure pipe.'],
+        sewage: ['good', 'Gravity sewers and drains.'],
+        abrasive: ['caution', 'Moderate.'],
+        chemical: ['good', 'Good with normal domestic effluent.'],
+        buried: ['good', 'Flexible pipe; needs granular bedding.'],
+        aboveGround: ['caution', 'UV embrittlement.'],
+        contaminated: ['caution', 'Some solvents attack PVC.'],
+      },
+      notes: ['SN4 = SDR41, SN8 = SDR34 (ring stiffness). Walls listed are EN 1401 minimums.'],
+      sources: ['en1401', 'guidance'] },
+
+    { id: 'grp', name: 'GRP (glass-reinforced plastic)', short: 'GRP', colour: '#c9a227', sizing: 'DN',
+      coatings: ['Resin-rich outer layer / UV gel coat'], linings: ['Resin-rich liner'],
+      suit: {
+        potable: ['good', 'WRAS-listed GRP pressure pipe is available.'],
+        raw: ['good', 'Good.'],
+        sewage: ['good', 'Corrosion resistant; used for large sewers and rising mains.'],
+        abrasive: ['caution', 'Depends on the liner.'],
+        chemical: ['good', 'Depends on the resin system.'],
+        buried: ['good', 'Flexible pipe — needs the specified bedding and compaction.'],
+        aboveGround: ['caution', 'Needs UV protection.'],
+        contaminated: ['caution', 'Check with the maker.'],
+      },
+      notes: ['UK GRP comes in more than one OD series (GRP series and DI-matching series) — measure the OD.',
+        'Wall depends on stiffness class (SN) and pressure class (PN), so no wall is listed here.',
+        'UltraGrip on GRP: remove the grippers — flexible joint only.'],
+      sources: ['wask', 'vjUltraGripCPage', 'guidance'] },
+
+    { id: 'clay', name: 'Vitrified clay (EN 295)', short: 'Clay', colour: '#a0522d', sizing: 'DN',
+      coatings: ['None (salt-glazed or unglazed)'], linings: ['None'],
+      suit: {
+        potable: ['bad', 'Drainage only.'],
+        raw: ['bad', 'Drainage only.'],
+        sewage: ['good', 'Gravity sewers and drains.'],
+        abrasive: ['good', 'Very hard and abrasion resistant.'],
+        chemical: ['good', 'Inert to almost all chemicals in sewage.'],
+        buried: ['good', 'Rigid pipe — bedding is critical.'],
+        aboveGround: ['caution', 'Brittle; easily broken.'],
+        contaminated: ['good', 'Inert pipe wall.'],
+      },
+      notes: ['Clay pipe ODs vary by maker and range; the values here are Hepworth SuperSleve / HepLine plain-ended pipe.'],
+      sources: ['hepworth', 'guidance'] },
+
+    { id: 'concrete', name: 'Concrete (EN 1916)', short: 'Concrete', colour: '#7a7a7a', sizing: 'DN',
+      coatings: ['None'], linings: ['Sacrificial concrete or plastic liners in aggressive sewers'],
+      suit: {
+        potable: ['bad', 'Not used for drinking water in the UK.'],
+        raw: ['caution', 'Large culverts only.'],
+        sewage: ['caution', 'H₂S from septic sewage attacks the crown — specify liners.'],
+        abrasive: ['caution', 'Erodes with grit over time.'],
+        chemical: ['caution', 'Attacked by acids and sulphates.'],
+        buried: ['good', 'Rigid pipe — designed for burial.'],
+        aboveGround: ['caution', 'Not normally used above ground.'],
+        contaminated: ['caution', 'Check the sulphate class of the ground.'],
+      },
+      notes: ['No dimensions listed: concrete pipe ODs and walls vary by maker and strength class — measure the OD on site.'],
+      sources: ['guidance'] },
+  ];
+
+  /* ------------------------------------------------------------------
+   * SERIES (dimension tables)
+   * ------------------------------------------------------------------ */
+  const series = [];
+
+  // ----- Ductile iron EN 545 (water). DE values and MINIMUM walls from
+  // EN 545:2010 Table 17, cross-checked with EADIPS Table 5.1 (0 differences).
+  const DE = { 40: 56, 50: 66, 60: 77, 65: 82, 80: 98, 100: 118, 125: 144, 150: 170, 200: 222, 250: 274, 300: 326,
+    350: 378, 400: 429, 450: 480, 500: 532, 600: 635, 700: 738, 800: 842, 900: 945, 1000: 1048, 1100: 1152, 1200: 1255 };
+  //   DN    C25   C30   C40   C50   C64   C100
+  const en545 = [
+    [40,   null, null, 3.0, 3.5, 4.0, 4.7], [50, null, null, 3.0, 3.5, 4.0, 4.7], [60, null, null, 3.0, 3.5, 4.0, 4.7],
+    [65,   null, null, 3.0, 3.5, 4.0, 4.7], [80, null, null, 3.0, 3.5, 4.0, 4.7], [100, null, null, 3.0, 3.5, 4.0, 4.7],
+    [125,  null, null, 3.0, 3.5, 4.0, 5.0], [150, null, null, 3.0, 3.5, 4.0, 5.9], [200, null, null, 3.1, 3.9, 5.0, 7.7],
+    [250,  null, null, 3.9, 4.8, 6.1, 9.5], [300, null, null, 4.6, 5.7, 7.3, 11.2],
+    [350,  null, 4.7, 5.3, 6.6, 8.5, 13.0], [400, null, 4.8, 6.0, 7.5, 9.6, 14.8], [450, null, 5.1, 6.8, 8.4, 10.7, 16.6],
+    [500,  null, 5.6, 7.5, 9.3, 11.9, 18.3], [600, null, 6.7, 8.9, 11.1, 14.2, 21.9],
+    [700,  6.8, 7.8, 10.4, 13.0, 16.5, null], [800, 7.5, 8.9, 11.9, 14.8, 18.8, null], [900, 8.4, 10.0, 13.3, 16.6, null, null],
+    [1000, 9.3, 11.1, 14.8, 18.4, null, null], [1100, 10.2, 12.2, 16.2, 20.2, null, null], [1200, 11.1, 13.3, 17.7, 22.0, null, null],
+  ];
+  const preferred = { C40: [40, 300], C30: [350, 600], C25: [700, 1200] }; // EN 545 Table 16
+  ['C25', 'C30', 'C40', 'C50', 'C64', 'C100'].forEach((cls, i) => {
+    const rows = en545.filter((r) => r[i + 1] != null).map((r) => [r[0], DE[r[0]], r[i + 1]]);
+    const pref = preferred[cls];
+    series.push({ id: 'EN545_' + cls, material: 'di', standard: 'EN 545:2010', cls,
+      label: `Class ${cls}` + (pref ? ` (preferred class DN${pref[0]}–${pref[1]})` : ''),
+      columns: ['dn', 'od', 'wall'], wallBasis: 'minimum', rows, lining: 'en545', preferredRange: pref || null,
+      notes: ['Wall = minimum iron thickness (EN 545:2010 Table 17). Cement-mortar lining reduces the bore further.'],
+      sources: ['en545', 'eadips'] });
+  });
+
+  // ----- K9 (old EN 545:2006 / ISO 2531 thickness class). Nominal wall.
+  const k9 = { 80: 6.0, 100: 6.0, 125: 6.0, 150: 6.0, 200: 6.3, 250: 6.8, 300: 7.2, 350: 7.7, 400: 8.1, 450: 8.6,
+    500: 9.0, 600: 9.9, 700: 10.8, 800: 11.7, 900: 12.6, 1000: 13.5, 1100: 14.4, 1200: 15.3 };
+  series.push({ id: 'K9', material: 'di', standard: 'EN 545:2006 / ISO 2531', cls: 'K9', label: 'Class K9 (legacy thickness class)',
+    columns: ['dn', 'od', 'wall'], wallBasis: 'nominal', rows: Object.keys(k9).map((dn) => [+dn, DE[dn], k9[dn]]), lining: 'en545',
+    unverified: { 450: 'Sources differ — 8.5 (MESteel) vs 8.6 (Electrotherm; formula gives 8.55). 8.6 shown.' },
+    notes: ['Nominal wall e = 9 × (0.5 + 0.001 DN), never below 6 mm. Most UK DI laid before ~2010 is K9.'],
+    sources: ['k9', 'k9b'] });
+
+  // ----- Ductile iron EN 598 (sewer). Table 11 nominal walls.
+  const en598p = { 80: 4.8, 100: 4.8, 125: 4.8, 150: 4.8, 200: 4.9, 250: 5.3, 300: 5.6, 350: 6.0, 400: 6.3, 450: 6.7,
+    500: 7.0, 600: 7.7, 700: 9.6, 800: 10.4, 900: 11.2, 1000: 12.0, 1100: 14.4, 1200: 15.3 };
+  const en598g = { 80: 3.4, 100: 3.4, 125: 3.4, 150: 3.4, 200: 3.4, 250: 4.1, 300: 4.8, 350: 5.5 };
+  const en598warn = 'Scanned table: above DN350 the pressure and gravity columns could not be separated with certainty — check EN 598 Table 11.';
+  series.push({ id: 'EN598_P', material: 'dis', standard: 'EN 598:2007+A1', cls: 'Pressure', label: 'Pressure sewer pipe',
+    columns: ['dn', 'od', 'wall'], wallBasis: 'nominal', rows: Object.keys(en598p).map((dn) => [+dn, DE[dn], en598p[dn]]),
+    unverified: Object.fromEntries([400, 450, 500, 600, 700, 800, 900, 1000, 1100, 1200].map((dn) => [dn, en598warn])),
+    notes: ['EN 598 Table 11 nominal iron thickness, pressure pipes.'], sources: ['en598'] });
+  series.push({ id: 'EN598_G', material: 'dis', standard: 'EN 598:2007+A1', cls: 'Gravity', label: 'Gravity sewer pipe',
+    columns: ['dn', 'od', 'wall'], wallBasis: 'nominal', rows: Object.keys(en598g).map((dn) => [+dn, DE[dn], en598g[dn]]),
+    notes: ['EN 598 Table 11 nominal iron thickness, gravity pipes (DN80–350 captured).'], sources: ['en598'] });
+
+  // ----- Carbon steel ASME B36.10M
+  //   DN   NPS       OD     Sch10  Sch40   Sch80   STD
+  const b3610 = [
+    [15,  '1/2"',   21.3,  2.11,  2.77,  3.73,  2.77], [20, '3/4"', 26.7, 2.11, 2.87, 3.91, 2.87],
+    [25,  '1"',     33.4,  2.77,  3.38,  4.55,  3.38], [32, '1 1/4"', 42.2, 2.77, 3.56, 4.85, 3.56],
+    [40,  '1 1/2"', 48.3,  2.77,  3.68,  5.08,  3.68], [50, '2"', 60.3, 2.77, 3.91, 5.54, 3.91],
+    [65,  '2 1/2"', 73.0,  3.05,  5.16,  7.01,  5.16], [80, '3"', 88.9, 3.05, 5.49, 7.62, 5.49],
+    [100, '4"',    114.3,  3.05,  6.02,  8.56,  6.02], [125, '5"', 141.3, 3.40, 6.55, 9.53, 6.55],
+    [150, '6"',    168.3,  3.40,  7.11, 10.97,  7.11], [200, '8"', 219.1, 3.76, 8.18, 12.70, 8.18],
+    [250, '10"',   273.1,  4.19,  9.27, 15.09,  9.27], [300, '12"', 323.9, 4.57, 10.31, 17.48, 9.53],
+    [350, '14"',   355.6,  6.35, 11.13, 19.05,  9.53], [400, '16"', 406.4, 6.35, 12.70, 21.44, 9.53],
+    [450, '18"',   457.2,  6.35, 14.27, 23.83,  9.53], [500, '20"', 508.0, 6.35, 15.09, 26.19, 9.53],
+    [600, '24"',   610.0,  6.35, 17.48, 30.96,  9.53], [700, '28"', 711.0, 7.92, null, null, 9.53],
+    [800, '32"',   813.0,  7.92, 17.48, null,  9.53], [900, '36"', 914.0, 7.92, 19.05, null, 9.53],
+    [1000, '40"', 1016.0,  null,  null,  null,  9.53], [1200, '48"', 1219.0, null, null, null, 9.53],
+  ];
+  [['Sch10', 3], ['Sch40', 4], ['Sch80', 5], ['STD', 6]].forEach(([cls, i]) => {
+    const rows = b3610.filter((r) => r[i] != null && (cls !== 'STD' || r[0] >= 300)).map((r) => [r[0], r[1], r[2], r[i]]);
+    series.push({ id: 'B3610_' + cls, material: 'steel', standard: 'ASME B36.10M', cls,
+      label: cls === 'STD' ? 'STD (standard weight, where it differs from Sch 40)' : cls.replace('Sch', 'Schedule '),
+      columns: ['dn', 'nps', 'od', 'wall'], wallBasis: 'nominal', rows,
+      notes: cls === 'STD' ? ['From 12" up, STD (9.53 mm) is lighter than Sch 40.'] : [], sources: ['b3610'] });
+  });
+
+  // ----- EN 10255 (threaded / general purpose tube) medium & heavy
+  const en10255 = [[15, 21.3, 2.6, 3.2], [20, 26.9, 2.6, 3.2], [25, 33.7, 3.2, 4.0], [32, 42.4, 3.2, 4.0], [40, 48.3, 3.2, 4.0],
+    [50, 60.3, 3.6, 4.5], [65, 76.1, 3.6, 4.5], [80, 88.9, 4.0, 5.0], [100, 114.3, 4.5, 5.4], [125, 139.7, 5.0, 5.4], [150, 165.1, 5.0, 5.4]];
+  [['Medium', 2], ['Heavy', 3]].forEach(([cls, i]) => series.push({ id: 'EN10255_' + cls, material: 'steel', standard: 'EN 10255',
+    cls, label: `${cls} series (old BS 1387 ${cls.toLowerCase()})`, columns: ['dn', 'od', 'wall'], wallBasis: 'nominal',
+    rows: en10255.map((r) => [r[0], r[1], r[i]]),
+    notes: ['DN150 EN 10255 tube is 165.1 mm OD — not the 168.3 mm of EN 10220 / ASME.'], sources: ['en10255'] }));
+
+  // ----- EN 10220 series 1 ODs (EN 10216 seamless / EN 10217 welded). Wall to order.
+  const en10220 = [[15, 21.3], [20, 26.9], [25, 33.7], [32, 42.4], [40, 48.3], [50, 60.3], [65, 76.1], [80, 88.9], [100, 114.3],
+    [125, 139.7], [150, 168.3], [200, 219.1], [250, 273.0], [300, 323.9], [350, 355.6], [400, 406.4], [450, 457.0],
+    [500, 508.0], [600, 610.0], [700, 711.0], [800, 813.0], [900, 914.0], [1000, 1016.0], [1200, 1219.0]];
+  series.push({ id: 'EN10220', material: 'steel', standard: 'EN 10220 (EN 10216 / 10217)', cls: 'Series 1 OD',
+    label: 'Series 1 OD — wall chosen to order', columns: ['dn', 'od', 'wall'], wallBasis: null,
+    rows: en10220.map((r) => [r[0], r[1], null]),
+    notes: ['EN 10220 lists many walls per OD; the wall is set by the order / project spec, so none is shown.'],
+    sources: ['wask'] });
+
+  // ----- Stainless ASME B36.19 10S / 40S
+  const b3619 = [[15, '1/2"', 21.34, 2.11, 2.77], [20, '3/4"', 26.67, 2.11, 2.87], [25, '1"', 33.40, 2.77, 3.38],
+    [32, '1 1/4"', 42.16, 2.77, 3.56], [40, '1 1/2"', 48.26, 2.77, 3.68], [50, '2"', 60.32, 2.77, 3.91],
+    [65, '2 1/2"', 73.02, 3.05, 5.16], [80, '3"', 88.90, 3.05, 5.49], [100, '4"', 114.30, 3.05, 6.02],
+    [125, '5"', 141.30, 3.40, 6.55], [150, '6"', 168.28, 3.40, 7.11], [200, '8"', 219.08, 3.76, 8.18],
+    [250, '10"', 273.00, 4.19, 9.27], [300, '12"', 323.80, 4.57, 9.52], [350, '14"', 355.60, 4.78, 9.52],
+    [400, '16"', 406.40, 4.78, 9.52], [450, '18"', 457.20, 4.78, 9.52], [500, '20"', 508.00, 5.54, 9.52],
+    [600, '24"', 609.6, 6.35, 9.52]];
+  [['10S', 3], ['40S', 4]].forEach(([cls, i]) => series.push({ id: 'B3619_' + cls, material: 'stainless',
+    standard: 'ASME B36.19', cls, label: 'Schedule ' + cls, columns: ['dn', 'nps', 'od', 'wall'], wallBasis: 'nominal',
+    rows: b3619.map((r) => [r[0], r[1], r[2], r[i]]), sources: ['b3619'] }));
+
+  // ----- Stainless EN ISO 1127 — 2.0 and 2.6 mm walls where Table 3 lists them.
+  // (Walls identified by matching the Table 3 masses to the listed wall sizes.)
+  const iso1127 = { 15: [21.3, [1.0, 1.6]], 20: [26.9, [1.6, 2.0, 2.6, 2.9, 3.2]], 25: [33.7, [1.6, 2.0, 2.6, 3.2]],
+    32: [42.4, [1.6, 2.0, 2.6, 3.2]], 40: [48.3, [1.6, 2.0, 2.6, 3.2]], 50: [60.3, [1.6, 2.0, 2.6, 2.9, 3.2]],
+    65: [76.1, [1.6, 2.0, 2.6, 2.9]], 80: [88.9, [1.6, 2.0, 2.6, 2.9, 3.2]], 100: [114.3, [1.6, 2.0, 2.6, 2.9, 3.6]],
+    125: [139.7, [1.6, 2.0, 2.6, 3.2, 4.0]], 150: [168.3, [1.6, 2.0, 2.6, 3.2, 4.0]], 200: [219.1, [2.0, 2.6, 3.2, 4.0]],
+    250: [273.0, [2.0, 2.6, 3.2, 4.0]], 300: [323.9, [2.6, 3.2, 4.0]], 350: [355.6, [2.6, 3.2, 4.0]], 400: [406.4, [2.6, 3.2, 4.0]] };
+  [2.0, 2.6].forEach((w) => series.push({ id: 'ISO1127_' + w.toFixed(1), material: 'stainless', standard: 'EN ISO 1127',
+    cls: w.toFixed(1) + ' mm', label: `${w.toFixed(1)} mm wall (common thin-wall)`, columns: ['dn', 'od', 'wall'], wallBasis: 'nominal',
+    rows: Object.keys(iso1127).filter((dn) => iso1127[dn][1].includes(w)).map((dn) => [+dn, iso1127[dn][0], w]),
+    notes: ['Same ODs as EN 10220 series 1. Other walls listed for the OD are shown in the row details.'],
+    wallsListed: Object.fromEntries(Object.keys(iso1127).map((dn) => [dn, iso1127[dn][1]])),
+    sources: ['iso1127'] }));
+
+  // ----- PE100 EN 12201-2 (rows: OD, wall). Source table read right-aligned.
+  //   OD    SDR26  SDR21  SDR17  SDR11
+  const pe = [
+    [20,  null, null, null, 1.9], [25, null, null, null, 2.3], [32, null, null, null, 2.9],
+    [40,  1.8, 2.0, 2.4, 3.7], [50, 2.0, 2.4, 3.0, 4.6], [63, 2.5, 3.0, 3.8, 5.8], [75, 2.9, 3.6, 4.5, 6.8],
+    [90,  3.5, 4.3, 5.4, 8.2], [110, 4.2, 5.3, 6.6, 10.0], [125, 4.8, 6.0, 7.4, 11.4], [140, 5.4, 6.7, 8.3, 12.7],
+    [160, 6.2, 7.7, 9.5, 14.6], [180, 6.9, 8.6, 10.7, 16.4], [200, 7.7, 9.6, 11.9, 18.2], [225, 8.6, 10.8, 13.4, 20.5],
+    [250, 9.6, 11.9, 14.8, 22.7], [280, 10.7, 13.4, 16.6, 25.4], [315, 12.1, 15.0, 18.7, 28.6], [355, 13.6, 16.9, 21.1, 32.2],
+    [400, 15.3, 19.1, 23.7, 36.3], [450, 17.2, 21.5, 26.7, 40.9], [500, 19.1, 23.9, 29.7, 45.4], [560, 21.4, 26.7, 33.2, 50.8],
+    [630, 24.1, 30.0, 37.4, 57.2], [710, 27.2, 33.9, 42.1, 64.5], [800, 30.6, 38.1, 47.4, 72.6],
+  ];
+  [['SDR26', 1, 'PN6'], ['SDR21', 2, 'PN8'], ['SDR17', 3, 'PN10'], ['SDR11', 4, 'PN16']].forEach(([cls, i, pn]) => series.push({
+    id: 'PE100_' + cls, material: 'pe', standard: 'EN 12201-2 PE100', cls, label: `${cls} (PE100 ${pn})`,
+    columns: ['od', 'wall'], wallBasis: 'nominal', rows: pe.filter((r) => r[i] != null).map((r) => [r[0], r[i]]),
+    unverified: cls === 'SDR11' ? { 20: 'Sources differ for 20 mm SDR11 (1.9 vs 2.0 mm). UK 20 mm MDPE is often SDR9 (2.3 mm).' }
+      : cls === 'SDR26' ? { 40: 'Small SDR26 sizes are not normally made for water — check availability.' } : {},
+    notes: [`PE80 ${cls} has the same dimensions (lower pressure rating).`], sources: ['en12201'] }));
+
+  // PE OD -> matching DN (equivalent bore) — HK WSD Table 22.09-2.
+  const peDnEquiv = { 20: 15, 25: 20, 32: 25, 50: 40, 63: 50, 90: 80, 125: 100, 180: 150, 250: 200, 315: 250, 355: 300,
+    450: 350, 500: 400, 560: 450, 630: 500, 710: 600, 800: 700 };
+
+  // ----- PVC-U EN 1452 pressure (rows: OD, wall). Minimum walls.
+  // dn 63–90: design coefficient 2.5 → PN10 = SDR21, PN16 = SDR13.6
+  // dn ≥110:  design coefficient 2.0 → PN10 = SDR26, PN16 = SDR17
+  const pvc10 = [[63, 3.0], [75, 3.6], [90, 4.3], [110, 4.2], [125, 4.8], [140, 5.4], [160, 6.2], [180, 6.9], [200, 7.7],
+    [225, 8.6], [250, 9.6], [280, 10.7], [315, 12.1], [355, 13.6], [400, 15.3], [450, 17.2], [500, 19.1], [560, 21.4], [630, 24.1]];
+  const pvc16 = [[63, 4.7], [75, 5.6], [90, 6.7], [110, 6.6], [125, 7.4], [140, 8.3], [160, 9.5], [180, 10.7], [200, 11.9],
+    [225, 13.4], [250, 14.8], [280, 16.6], [315, 18.7], [355, 21.1], [400, 23.7], [450, 26.7], [500, 29.7]];
+  series.push({ id: 'EN1452_PN10', material: 'pvc', standard: 'EN 1452-2', cls: 'PN10', label: 'PN10',
+    columns: ['od', 'wall'], wallBasis: 'minimum', rows: pvc10,
+    unverified: { 400: 'Source shows "45.3" (typo); 15.3 mm used — the same SDR26 value appears in the EN 12201 table.' },
+    notes: ['dn 63–90 = SDR21; dn 110 and up = SDR26.'], sources: ['en1452'] });
+  series.push({ id: 'EN1452_PN16', material: 'pvc', standard: 'EN 1452-2', cls: 'PN16', label: 'PN16',
+    columns: ['od', 'wall'], wallBasis: 'minimum', rows: pvc16,
+    notes: ['dn 63–90 = SDR13.6; dn 110 and up = SDR17.'], sources: ['en1452'] });
+
+  // ----- PVC-U imperial OD (BS 3505). OD only.
+  const bs3505 = [[15, '1/2"', 21.4], [20, '3/4"', 26.8], [25, '1"', 33.6], [32, '1 1/4"', 42.3], [40, '1 1/2"', 48.3],
+    [50, '2"', 60.4], [80, '3"', 88.9], [100, '4"', 114.3], [125, '5"', 140.2], [150, '6"', 168.3], [200, '8"', 219.1],
+    [250, '10"', 273.0], [300, '12"', 323.9]];
+  series.push({ id: 'BS3505', material: 'pvc', standard: 'BS 3505 (imperial PVC-U)', cls: 'Imperial OD', label: 'Imperial-size PVC-U (OD only)',
+    columns: ['dn', 'nps', 'od', 'wall'], wallBasis: null, rows: bs3505.map((r) => [r[0], r[1], r[2], null]),
+    notes: ['Older UK PVC-U water pipe. Wall depends on class (B–E) — not listed (no reliable source found).'], sources: ['wask'] });
+
+  // ----- PVC-U sewer EN 1401 (rows: OD, wall). Minimum walls.
+  const en1401 = [[110, 3.2, 3.2], [125, 3.2, 3.7], [160, 4.0, 4.7], [200, 4.9, 5.9], [250, 6.2, 7.3], [315, 7.7, 9.2],
+    [355, 8.7, 10.4], [400, 9.8, 11.7], [450, 11.0, 13.2], [500, 12.3, 14.6], [630, 15.4, 18.4]];
+  [['SN4', 1, 'SDR41'], ['SN8', 2, 'SDR34']].forEach(([cls, i, sdr]) => series.push({ id: 'EN1401_' + cls, material: 'pvcs',
+    standard: 'EN 1401-1', cls, label: `${cls} (${sdr})`, columns: ['od', 'wall'], wallBasis: 'minimum',
+    rows: en1401.map((r) => [r[0], r[i]]), sources: ['en1401'] }));
+
+  // ----- Imperial cast iron & AC turned ends (BS 78 / BS 1211 / BS 486), OD only.
+  //   DN   NB          A/B OD  C/D OD
+  const ci = [[40, '1 1/2"', 55.9, 55.9], [50, '2"', 69.1, 69.1], [65, '2 1/2"', 82.3, 82.3], [80, '3"', 95.5, 95.5],
+    [100, '4"', 121.9, 121.9], [125, '5"', 149.9, 149.9], [150, '6"', 177.3, 177.3], [175, '7"', 204.7, 204.7],
+    [200, '8"', 232.2, 232.2], [225, '9"', 259.1, 259.1], [250, '10"', 286.0, 286.0], [300, '12"', 333.8, 345.4],
+    [350, '14"', 387.0, 399.3], [375, '15"', 413.0, 426.2], [400, '16"', 439.0, 453.1], [450, '18"', 492.0, 506.9],
+    [500, '20"', 545.0, 560.3], [525, '21"', 572.0, 587.2], [550, '22"', 598.0, 613.7], [600, '24"', 650.0, 667.0],
+    [650, '26"', 703.0, 720.3], [675, '27"', 729.0, 746.8], [700, '28"', 755.0, 773.2], [750, '30"', 807.0, 826.0],
+    [800, '32"', 860.0, 879.3], [825, '33"', 886.0, 905.8], [900, '36"', 964.0, 984.5], [1000, '40"', 1068.0, 1090.2],
+    [1050, '42"', 1121.0, 1143.0], [1200, '48"', 1277.0, 1300.5]];
+  [['Class A/B', 2, 'AB'], ['Class C/D', 3, 'CD']].forEach(([cls, i, tag]) => {
+    series.push({ id: 'IMP_CI_' + tag, material: 'ci', standard: 'BS 78 / BS 1211 (imperial cast iron)', cls,
+      label: `${cls} OD`, columns: ['dn', 'nps', 'od', 'wall'], wallBasis: null,
+      rows: ci.map((r) => [r[0], r[1], r[i], null]), notes: ['OD only — wall depends on class and is not listed.'], sources: ['wask'] });
+    const acRows = ci.filter((r) => r[0] <= 600);
+    series.push({ id: 'IMP_AC_' + tag, material: 'ac', standard: 'BS 486 imperial AC (turned end)', cls,
+      label: `${cls} OD — turned spigot end`, columns: ['dn', 'nps', 'od', 'wall'], wallBasis: null,
+      rows: acRows.map((r) => [r[0], r[1], r[i], null]),
+      unverified: Object.fromEntries(acRows.filter((r) => r[0] > 300).map((r) => [r[0],
+        'The chart groups imperial CI and AC turned ends in one column; large AC sizes may not exist — check on site.'])),
+      notes: ['OD of the TURNED end only; the barrel between turned ends is larger and rougher.'], sources: ['wask'] });
+  });
+
+  // ----- Metric AC (BS 486:1990) turned-end ODs, Class 15 / 20 / 25.
+  const acm = [[50, null, null, 69], [80, null, null, 96], [100, null, null, 122], [150, 177, null, 177], [200, 232, 232, 240],
+    [225, 259, 259, 268], [250, 286, 286, 295], [300, 334, 345, 356], [350, 392, 405, 419], [400, 448, 463, 478],
+    [450, 498, 515, 532], [500, 568, 586, 605], [600, 654, 672, 691], [700, 761, 780, 801], [750, 808, 830, 852],
+    [800, 882, 904, 915], [850, 927, 952, 977], [900, 970, 996, 1024]];
+  [['Class 15', 1], ['Class 20', 2], ['Class 25', 3]].forEach(([cls, i]) => series.push({ id: 'AC486_' + cls.slice(-2),
+    material: 'ac', standard: 'BS 486:1990 metric AC (turned end)', cls, label: cls + ' OD',
+    columns: ['dn', 'od', 'wall'], wallBasis: null, rows: acm.filter((r) => r[i] != null).map((r) => [r[0], r[i], null]),
+    notes: ['OD of the turned end only.'], sources: ['wask'] }));
+
+  // ----- GRP typical UK sizes (BS 5480), OD only.
+  const grp = [[200, 220], [250, 272], [300, 324], [350, 376], [400, 427], [450, 478], [500, 530], [600, 633], [700, 718],
+    [800, 820], [900, 924], [1000, 1027], [1200, 1228]];
+  series.push({ id: 'GRP5480', material: 'grp', standard: 'BS 5480 (typical UK sizes)', cls: 'GRP series OD',
+    label: 'GRP series OD (OD only)', columns: ['dn', 'od', 'wall'], wallBasis: null, rows: grp.map((r) => [r[0], r[1], null]),
+    notes: ['Some GRP is made to ductile-iron ODs instead — measure the OD.'], sources: ['wask'] });
+
+  // ----- Clay: Hepworth SuperSleve / HepLine plain-ended (maker OD; wall derived).
+  const clay = [[100, 122], [150, 178], [225, 263], [300, 357]];
+  series.push({ id: 'CLAY_SS', material: 'clay', standard: 'EN 295 — Hepworth SuperSleve / HepLine', cls: 'Plain ended',
+    label: 'SuperSleve / HepLine plain-ended', columns: ['dn', 'od', 'wall'], wallBasis: 'derived',
+    rows: clay.map((r) => [r[0], r[1], (r[1] - r[0]) / 2]),
+    unverified: { 100: 'Wall derived as (OD − nominal bore) ÷ 2 — the maker gives OD and nominal bore only.',
+      150: 'Wall derived from OD and nominal bore.', 225: 'Wall derived from OD and nominal bore.',
+      300: 'Wall derived from OD and nominal bore. 2020 sheet gives OD 358, later sheet 357.' },
+    sources: ['hepworth'] });
+
+  /* ------------------------------------------------------------------
+   * COUPLINGS AND FLANGE ADAPTORS
+   *   type      'coupling' | 'flangeAdaptor'
+   *   kind      'wide'   — one fitting covers a band of ODs (min–max)
+   *             'exact'  — made for one nominal plastic OD (min = max)
+   *             'narrow' — a few mm of tolerance around one OD
+   *   restraint 'none' | 'restrained' | 'restrained*' (* depends on material)
+   *   ranges    [ label, min, max, extra ]   extra = flange options / note
+   *   materials { materialId: [rating, note] } as stated by the maker.
+   *             A material that is not listed = "not listed by the maker".
+   * Every range below was copied from the cited datasheet / product page.
+   * ------------------------------------------------------------------ */
+  const METAL = ['steel', 'stainless', 'di', 'dis', 'ci'];
+  const ok = (ids, note = '') => Object.fromEntries(ids.map((id) => [id, ['good', note]]));
+  const exactOD = (list) => list.map((x) => (Array.isArray(x) ? [x[0] + ' mm', x[0], x[0], x[1]] : [x + ' mm', x, x]));
+  const narrow = (list) => list.map(([nom, a, b]) => [nom.toFixed(1) + ' mm', a, b]);
+  const PE_LINER_VJ = 'Restrained, but a Viking Johnson stainless-steel support liner is REQUIRED.';
+  const NO_GRIP = 'Grippers must be removed — flexible (unrestrained) joint only.';
+
+  const couplings = [
+    { id: 'vj-maxifit', maker: 'Viking Johnson', name: 'MaxiFit coupling', type: 'coupling', kind: 'wide', restraint: 'none',
+      pressure: 'Water 16 bar, gas 6 bar',
+      ranges: [['DN40', 47.9, 59.5], ['DN50', 57.0, 74.0], ['DN65', 63.0, 85.0], ['DN80', 85.0, 107.0], ['DN100', 107.0, 132.0],
+        ['DN125', 132.0, 158.0], ['DN150', 158.0, 184.0], ['DN175', 189.0, 212.0], ['DN200', 218.0, 244.0], ['DN225', 243.0, 269.0],
+        ['DN250', 266.0, 295.0], ['DN300', 315.0, 349.0],
+        ...[[351.0, 368.0], [374.5, 391.5], [386.0, 403.0], [394.3, 411.3], [404.8, 421.8], [412.0, 429.0], [418.2, 435.2],
+          [425.0, 442.0], [434.5, 451.5], [439.0, 456.0], [447.2, 464.2], [455.0, 472.0], [467.0, 484.0], [476.0, 493.0],
+          [487.0, 504.3], [492.0, 509.0], [501.9, 518.9], [510.0, 527.0], [515.0, 532.0], [527.0, 544.0], [540.1, 557.1],
+          [546.0, 563.0], [555.3, 572.3], [565.0, 582.0], [582.2, 599.2], [593.0, 610.0], [601.0, 618.0], [613.0, 630.0],
+          [618.0, 635.0], [630.0, 647.0], [645.2, 662.2], [654.0, 671.0], [662.0, 679.0], [675.0, 692.0], [689.0, 706.0],
+          [695.0, 712.0], [710.0, 727.0]].map(([a, b]) => ['Large dia', a, b])],
+      materials: { ...ok([...METAL, 'pvc', 'ac', 'grp']),
+        pe: ['caution', 'Repairs only: a short PE insert (≤ 1 m standard, ≤ 2 m MaxiFitXtra) in a rigid main, with a close-fit support liner. Never to join long lengths of PE.'] },
+      notes: ['Does NOT resist end load — thrust must be restrained externally.', 'Also made as MaxiFitXtra (long sleeve) and MaxiCap end cap.'],
+      sources: ['vjMaxiFit', 'vjMaxiFitLarge', 'vjMaxiFitBrochure'] },
+
+    { id: 'vj-maxidaptor', maker: 'Viking Johnson', name: 'MaxiDaptor flange adaptor', type: 'flangeAdaptor', kind: 'wide', restraint: 'none',
+      pressure: 'Water 16 bar, gas 6 bar',
+      ranges: [['DN50', 57.0, 74.0, 'DN50 PN10/16; 2" ANSI 125/150; 2.5" BS10 A/D/E'],
+        ['DN65', 63.0, 85.0, 'DN60/65/80 PN10/16; 2.5"/3" BS10 or ANSI'], ['DN80', 85.0, 107.0, 'DN80 PN10/16; 3"/3.5" BS10; ANSI'],
+        ['DN100', 107.0, 132.0, 'DN100 PN10/16; 4" BS10 A/D/E; ANSI 125/150'], ['DN125', 132.0, 158.0, 'DN125 or DN150 PN10/16; 5"/6" BS10'],
+        ['DN150', 158.0, 184.0, 'DN150 PN10/16; 6" BS10 A/D; ANSI'], ['DN175', 189.0, 212.0, 'DN150 or DN200 PN10/16; 8" BS10'],
+        ['DN200', 218.0, 244.0, 'DN200 PN10/16; 8" BS10 A/D; ANSI'], ['DN225', 243.0, 269.0, 'DN250 PN10/16; 10" BS10 E'],
+        ['DN250', 266.0, 295.0, 'DN250 PN10/16; 10" BS10 E'], ['DN300', 315.0, 349.0, 'DN300 PN10/16']],
+      materials: { ...ok([...METAL, 'pvc', 'ac', 'grp']),
+        pe: ['caution', 'Not end-load resistant — as MaxiFit, PE only with a support liner and external restraint; prefer UltraGrip / AquaFast.'] },
+      notes: ['Does NOT resist end load. Several drillings per size — check the flange you are mating to.'],
+      sources: ['vjMaxiDaptor', 'vjMaxiFitBrochure'] },
+
+    { id: 'vj-ultragrip-c', maker: 'Viking Johnson', name: 'UltraGrip coupling', type: 'coupling', kind: 'wide', restraint: 'restrained*',
+      pressure: 'Water 16 bar DN40–300, 10 bar DN350–600; gas 5 bar to DN400. Below ground only, max 30 °C.',
+      ranges: [['DN40', 43.5, 63.5], ['DN50', 48.0, 71.0], ['DN65', 63.0, 83.7], ['DN80', 85.7, 107.0], ['DN100', 107.0, 133.2],
+        ['DN125', 132.2, 160.2], ['DN150', 158.2, 192.2], ['DN175', 192.2, 226.9], ['DN200', 218.1, 256.0], ['DN250', 266.0, 310.0],
+        ['DN300', 315.0, 356.0], ['DN350', 352.2, 396.0], ['DN400', 398.2, 442.0], ['DN450', 448.0, 492.0], ['DN500', 498.0, 552.0],
+        ['DN500', 558.0, 608.0], ['DN600', 604.0, 648.0], ['DN600', 676.0, 726.0]],
+      materials: { ...ok(['di', 'dis', 'ci', 'steel'], 'Restrained (end-load resistant).'),
+        pe: ['caution', PE_LINER_VJ], pvc: ['caution', 'Restrained — PVC-U pressure classes 10–16 bar only.'],
+        ac: ['caution', NO_GRIP], grp: ['caution', NO_GRIP] },
+      notes: ['Coated steel is listed by the maker as flexible-only.'], sources: ['vjUltraGripC', 'vjUltraGripCPage'] },
+
+    { id: 'vj-ultragrip-fa', maker: 'Viking Johnson', name: 'UltraGrip flange adaptor', type: 'flangeAdaptor', kind: 'wide', restraint: 'restrained*',
+      pressure: 'Water 16 bar DN40–300, 10 bar DN350–600; gas 5 bar to DN400. Below ground only, max 30 °C.',
+      ranges: [['DN40', 43.5, 63.5, 'DN40 or DN50 PN10/16'], ['DN50', 48.0, 71.0, 'DN50 PN10/16'],
+        ['DN65', 63.0, 83.7, 'DN60/65 or DN65 PN10/16'], ['DN80', 85.7, 107.0, 'DN80 PN10/16'],
+        ['DN100', 107.0, 133.2, 'DN100 PN10/16'], ['DN125', 132.2, 160.2, 'DN100, DN125 or DN150 PN10/16'],
+        ['DN150', 158.2, 192.2, 'DN150 PN10/16'], ['DN175', 192.2, 226.9, 'DN200 PN10/16'],
+        ['DN200', 218.1, 256.0, 'DN200 PN10/16'], ['DN250', 266.0, 310.0, 'DN250 PN10/16'],
+        ['DN300', 315.0, 356.0, 'DN300 PN10/16'], ['DN350', 352.2, 396.0, 'DN350 PN10/16'],
+        ['DN400', 398.2, 442.0, 'DN400 PN10/16'], ['DN450', 448.0, 492.0, 'DN400 or DN450 PN10/16'],
+        ['DN500', 498.0, 552.0, 'DN500 PN10/16'], ['DN500', 558.0, 608.0, 'DN500 PN10/16'],
+        ['DN600', 604.0, 648.0, 'DN600 PN10/16'], ['DN600', 676.0, 726.0, 'DN600 PN10/16']],
+      materials: { ...ok(['di', 'dis', 'ci', 'steel'], 'Restrained (end-load resistant).'),
+        pe: ['caution', PE_LINER_VJ], pvc: ['caution', 'Restrained — PVC-U pressure classes 10–16 bar only.'],
+        ac: ['caution', NO_GRIP], grp: ['caution', NO_GRIP] },
+      notes: ['Flanges drilled to EN 1092 PN10/16.'], sources: ['vjUltraGripFA', 'vjUltraGripFAPage'] },
+
+    { id: 'vj-aquafast-c', maker: 'Viking Johnson', name: 'AquaFast coupling (PE / PVC)', type: 'coupling', kind: 'exact', restraint: 'restrained',
+      pressure: 'Water 16 bar; not approved for gas; −20 to +40 °C',
+      ranges: exactOD([63, 75, 90, 110, 125, 140, 160, 180, 200, 225, 250, 280, 315]),
+      materials: { pe: ['good', 'PE80 / PE100 SDR11 and SDR17: no support liner needed. Fully end-load resistant.'],
+        pvc: ['good', 'Metric PVC-U (10 bar) and PVC-O (16 bar) without a liner.'] },
+      notes: ['Made for one nominal plastic OD — not for metal pipes.'], sources: ['vjAquaFastC'] },
+
+    { id: 'vj-aquafast-fa', maker: 'Viking Johnson', name: 'AquaFast flange adaptor (PE / PVC)', type: 'flangeAdaptor', kind: 'exact', restraint: 'restrained',
+      pressure: 'Water 16 bar; not approved for gas',
+      ranges: exactOD([[63, 'DN50/65 PN10/16'], [75, 'DN65/80 PN10/16'], [90, 'DN65/80 PN10/16'], [110, 'DN100 PN10/16'],
+        [125, 'DN100/125 PN10/16'], [140, 'DN125 PN10/16'], [160, 'DN150 PN10/16'], [180, 'DN150 PN10/16'], [200, 'DN200 PN10/16'],
+        [225, 'DN200 PN10/16'], [250, 'DN250 PN10/16'], [280, 'DN250 PN10/16'], [315, 'DN300 PN10/16']]),
+      materials: { pe: ['good', 'PE80 / PE100 SDR11 and SDR17: no support liner needed. Fully end-load resistant.'],
+        pvc: ['good', 'Metric PVC-U (10 bar) and PVC-O (16 bar) without a liner.'] },
+      notes: ['Flanges drilled to EN 1092-1 PN10/16.'], sources: ['vjAquaFastFA', 'vjAquaFastC'] },
+
+    { id: 'avk-601', maker: 'AVK', name: 'Series 601 Universal Supa® coupling', type: 'coupling', kind: 'wide', restraint: 'none',
+      pressure: 'PN16; −10 to +70 °C',
+      ranges: [['DN40', 46, 63], ['DN50', 57, 74], ['DN65', 68, 85], ['DN80', 84, 106], ['DN80', 99, 119], ['DN100', 109, 133],
+        ['DN125', 132, 157], ['DN150', 157, 183], ['DN150', 176, 201], ['DN200', 193, 215], ['DN200', 218, 242], ['DN225', 242, 268],
+        ['DN250', 266, 292], ['DN300', 301, 327], ['DN300', 324, 350], ['DN350', 352, 378], ['DN350', 372, 397], ['DN350', 384, 410],
+        ['DN400', 410, 436], ['DN400', 436, 462]],
+      materials: { ...ok(['steel', 'di', 'dis', 'ci', 'pvc', 'ac']),
+        stainless: ['caution', '304/316 stainless only with OD ≤ 304 mm and wall ≥ 2 mm.'] },
+      notes: ['Not designed for end-load-resistant applications.',
+        'AVK also makes Series 602 Supa step couplings for two different ODs — ranges not captured here; ask AVK UK.'],
+      sources: ['avk601', 'avkRange'] },
+
+    { id: 'avk-603', maker: 'AVK', name: 'Series 603 Universal Supa® flange adaptor', type: 'flangeAdaptor', kind: 'wide', restraint: 'none',
+      pressure: 'Max working pressure 16 bar; max 70 °C',
+      ranges: [['DN40/50', 46, 63, 'DN40/50'], ['DN50', 57, 74, 'DN50'], ['DN50/65', 68, 85, 'DN50/65'],
+        ['DN80', 84, 106, 'DN80'], ['DN100', 99, 119, 'DN100'], ['DN100', 109, 133, 'DN100'],
+        ['DN125/150', 132, 157, 'DN125/150'], ['DN150', 157, 183, 'DN150'], ['DN150', 176, 201, 'DN150'],
+        ['DN200', 193, 215, 'DN200'], ['DN200', 218, 242, 'DN200'], ['DN250', 242, 268, 'DN250'],
+        ['DN250', 266, 292, 'DN250'], ['DN250', 280, 306, 'DN250'], ['DN300', 301, 327, 'DN300'],
+        ['DN300', 324, 350, 'DN300'], ['DN350', 352, 378, 'DN350'], ['DN350', 372, 396, 'DN350'],
+        ['DN350', 384, 410, 'DN350'], ['DN400', 410, 436, 'DN400'], ['DN400', 436, 462, 'DN400']],
+      materials: ok(['steel', 'di', 'dis', 'ci', 'pvc', 'ac']),
+      notes: ['Flange drilling EN 1092 PN10/16 (variant 603/A-003 adds BS 10 / ANSI drillings for DN80–200).', 'Not end-load resistant.'],
+      sources: ['avk603'] },
+
+    { id: 'avk-621', maker: 'AVK', name: 'Series 621 Supa Plus® coupling (PE)', type: 'coupling', kind: 'exact', restraint: 'restrained',
+      pressure: 'PN16; max 70 °C',
+      ranges: exactOD([40, 50, 63, 75, 90, 110, 125, 140, 160, 180, 200, 225, 250, 280, 315]),
+      materials: { pe: ['good', 'PE only. Add an AVK series 05 support bush for a BS 8561 type 2 joint (type 1 with the heavy-duty bush, OD ≤ 250).'],
+        pvc: ['bad', 'Not for PVC (maker: "PE pipes only").'] },
+      notes: ['OD 280 and 315: BS 8561 type 2 only.'], sources: ['avk621'] },
+
+    { id: 'avk-623', maker: 'AVK', name: 'Series 623 Supa Plus™ flange adaptor (PE / PVC)', type: 'flangeAdaptor', kind: 'exact', restraint: 'restrained',
+      pressure: 'PN10/16; max 70 °C',
+      ranges: exactOD([[40, 'DN40'], [50, 'DN40'], [63, 'DN50/65'], [75, 'DN60/65'], [90, 'DN80'], [110, 'DN100'], [125, 'DN125 PN10/16 or DN100 PN16'],
+        [140, 'DN125'], [160, 'DN150'], [180, 'DN150'], [200, 'DN200 PN10 or PN16'], [225, 'DN200 PN10 or PN16'], [250, 'DN250 PN10/16'], [280, 'DN250 PN16'], [315, 'DN300']]),
+      materials: { pe: ['good', 'Tensile, for PE.'], pvc: ['good', 'Tensile, for uPVC.'] },
+      notes: ['Flange drilling EN 1092 PN10/16 (some sizes PN10 or PN16 only).'], sources: ['avk623'] },
+
+    { id: 'avk-631', maker: 'AVK', name: 'Series 631 Supa Maxi™ coupling', type: 'coupling', kind: 'wide', restraint: 'restrained',
+      pressure: 'PN16 (DN700 tensile to 16 bar; DN800 tensile to 10 bar); −10 to +70 °C',
+      ranges: [['DN50', 48, 71], ['DN65', 69, 91], ['DN80', 82, 106], ['DN100', 104, 133], ['DN125', 132, 159], ['DN150', 159, 188],
+        ['DN200', 193, 227], ['DN225', 224, 257], ['DN250', 266, 301], ['DN300', 314, 356], ['DN350', 352, 396], ['DN400', 392, 442],
+        ['DN450', 448, 508], ['DN500', 498, 552], ['DN600', 604, 652], ['DN700', 700, 745], ['DN800', 800, 842, 'Metal / AC pipes only']],
+      materials: { ...ok(['steel', 'stainless', 'di', 'dis', 'ci', 'grp', 'ac', 'pvc'], 'Universal and tensile.'),
+        pe: ['caution', 'Tensile on PE, but a support bush must be used.'] },
+      notes: ['Gunmetal grip segments for PE/PVC, hardened stainless for metal / GRP / AC pipes.'], sources: ['avk631'] },
+
+    { id: 'avk-633', maker: 'AVK', name: 'Series 633 Supa Maxi™ flange adaptor', type: 'flangeAdaptor', kind: 'wide', restraint: 'restrained',
+      pressure: 'PN16 (DN800 tensile to 10 bar)',
+      ranges: [['DN40-50', 48, 71, 'DN40-50'], ['DN50-65', 69, 91, 'DN50-65'], ['DN80', 82, 106, 'DN80'],
+        ['DN100', 104, 133, 'DN100'], ['DN100/125', 132, 159, 'DN100/125 or DN150'], ['DN150', 159, 188, 'DN150'],
+        ['DN200', 193, 227, 'DN200'], ['DN250', 224, 257, 'DN250 or DN200'], ['DN250', 266, 301, 'DN250'],
+        ['DN300', 314, 356, 'DN300'], ['DN350', 352, 396, 'DN350'], ['DN400', 392, 442, 'DN400'],
+        ['DN450', 448, 508, 'DN450'], ['DN500', 498, 552, 'DN500'], ['DN600', 604, 652, 'DN600'],
+        ['DN700', 700, 745, 'DN700'], ['DN800', 800, 842, 'DN800 — metal / AC pipes only']],
+      materials: { ...ok(['steel', 'stainless', 'di', 'dis', 'ci', 'grp', 'ac', 'pvc'], 'Universal and tensile.'),
+        pe: ['caution', 'Tensile on PE, but a support bush must be used.'] },
+      notes: ['Universal flange drilling EN 1092 PN10/16.'], sources: ['avk633'] },
+
+    { id: 'straub-grip', maker: 'Straub', name: 'STRAUB-GRIP (axially restrained)', type: 'coupling', kind: 'narrow', restraint: 'restrained',
+      pressure: 'Pressure rating falls with size — read the PN columns on the datasheet',
+      ranges: narrow([
+        [21.3, 21.0, 21.6], [25.0, 24.5, 25.5], [26.9, 26.4, 27.4], [28.0, 27.5, 28.5], [30.0, 29.5, 30.5], [33.7, 33.2, 34.2],
+        [35.0, 34.5, 35.5], [38.0, 37.5, 38.5], [40.0, 39.5, 40.5], [42.4, 41.9, 42.9], [44.5, 44.0, 45.0], [48.3, 47.8, 48.8],
+        [54.0, 53.5, 54.5], [57.0, 56.4, 57.6], [60.3, 59.7, 60.9], [63.0, 62.4, 63.6], [66.6, 64.9, 67.3], [70.0, 68.9, 70.7],
+        [73.0, 72.3, 73.7], [76.1, 75.3, 76.9], [79.5, 78.7, 80.3], [84.0, 83.2, 84.8], [88.9, 88.0, 89.8], [95.0, 94.0, 96.0],
+        [98.0, 97.0, 99.0], [100.6, 99.6, 101.6], [101.6, 100.6, 102.6], [104.0, 103.0, 105.0], [104.8, 103.8, 105.8], [108.0, 106.9, 109.1],
+        [114.3, 113.2, 115.4], [118.0, 116.9, 119.1], [122.0, 120.6, 123.4], [125.0, 123.7, 126.3], [127.0, 125.7, 128.3], [129.0, 127.7, 130.3],
+        [130.2, 128.9, 131.5], [133.0, 131.7, 134.3], [139.7, 138.3, 141.1], [141.3, 139.9, 142.7], [144.0, 142.6, 145.4], [154.0, 152.5, 155.5],
+        [159.0, 157.4, 160.6], [165.0, 163.4, 166.6], [168.3, 166.6, 170.0], [180.0, 178.0, 182.0], [193.7, 192.0, 195.5], [200.0, 198.0, 202.0],
+        [204.0, 202.0, 206.0], [206.0, 204.0, 208.0], [219.1, 216.9, 221.3], [244.5, 242.0, 247.0], [250.0, 247.5, 252.5], [254.0, 251.5, 256.5],
+        [256.0, 253.5, 258.5], [267.0, 264.5, 269.5], [273.0, 270.5, 275.5], [306.0, 303.0, 309.0], [323.9, 320.5, 327.0], [355.6, 352.0, 359.0],
+        [406.4, 402.5, 410.5], [457.2, 452.5, 461.5], [508.0, 503.5, 512.5], [558.8, 554.5, 563.5], [609.6, 605.5, 614.0], [711.2, 707.0, 715.0]]),
+      materials: ok(['steel', 'stainless', 'di', 'dis'], 'Ratings are for rigid metal pipe.'),
+      notes: ['Narrow tolerance — for that exact OD only. Straub makes PLAST-GRIP for plastic pipes (not listed here).'],
+      sources: ['straubGrip'] },
+
+    { id: 'straub-flex', maker: 'Straub', name: 'STRAUB-FLEX 1 / FLEX 2 (not restrained)', type: 'coupling', kind: 'narrow', restraint: 'none',
+      pressure: 'Pressure rating depends on size and casing — read the PN columns on the datasheet',
+      ranges: narrow([
+        [48.3, 47.0, 49.5], [54.0, 52.5, 55.5], [57.0, 55.5, 58.5], [60.3, 59.0, 61.5], [70.0, 69.5, 71.0], [73.0, 71.5, 75.0],
+        [76.1, 74.5, 77.5], [80.0, 79.5, 81.5], [84.0, 82.5, 85.5], [88.9, 87.5, 90.5], [100.6, 99.0, 102.5], [101.6, 100.0, 103.5],
+        [104.0, 102.5, 105.5], [104.8, 103.0, 106.5], [108.0, 106.5, 110.0], [114.3, 112.5, 116.0], [127.0, 125.0, 129.0], [129.0, 127.0, 131.0],
+        [130.2, 128.5, 132.0], [133.0, 131.0, 135.0], [139.7, 138.0, 141.5], [141.3, 139.5, 143.0], [154.0, 152.0, 156.0], [159.0, 157.0, 161.0],
+        [168.3, 166.0, 170.5], [172.0, 170.0, 174.0], [180.0, 178.0, 182.0], [200.0, 198.0, 202.0], [219.1, 217.0, 222.0], [250.0, 248.0, 253.0],
+        [267.0, 264.0, 270.0], [273.0, 270.0, 276.0], [304.0, 301.0, 307.0], [323.9, 321.0, 327.0], [355.6, 353.0, 358.0], [406.4, 404.0, 409.0],
+        [457.2, 454.0, 460.0], [508.0, 505.0, 511.0], [558.8, 556.0, 562.0], [609.6, 606.0, 613.0], [711.2, 708.0, 715.0], [762.0, 758.0, 766.0],
+        [812.8, 809.0, 817.0], [914.4, 910.0, 918.0], [1016.0, 1012.0, 1020.0], [1117.6, 1114.0, 1122.0], [1219.2, 1215.0, 1224.0], [1320.8, 1316.0, 1325.0],
+        [1422.4, 1418.0, 1427.0], [1524.0, 1519.0, 1529.0], [1600.0, 1595.0, 1605.0], [1625.6, 1621.0, 1631.0], [1727.2, 1722.0, 1732.0], [1828.8, 1824.0, 1834.0],
+        [1930.4, 1925.0, 1935.0], [2032.0, 2027.0, 2037.0]]),
+      materials: ok(['steel', 'stainless', 'di', 'dis']),
+      notes: ['Does not resist end load. Narrow tolerance per size.'], sources: ['straubFlex'] },
+
+    { id: 'teekay-axilock', maker: 'Teekay', name: 'Axilock-S / Axilock (axially restrained)', type: 'coupling', kind: 'narrow', restraint: 'restrained',
+      pressure: 'Rated for steel pipe; pressure falls with size — read the brochure table',
+      ranges: narrow([
+        [21.3, 21.0, 21.6], [26.9, 26.6, 27.3], [28.0, 27.7, 28.4], [30.0, 29.7, 30.4], [33.7, 33.3, 34.1], [35.0, 34.7, 35.4],
+        [38.0, 37.0, 39.0], [42.4, 41.4, 43.4], [44.5, 43.5, 45.5], [48.3, 47.3, 49.3], [54.0, 53.0, 55.0], [57.0, 56.0, 58.0],
+        [60.3, 59.0, 62.0], [63.0, 62.0, 65.0], [67.0, 66.0, 69.0], [70.0, 69.0, 72.0], [73.0, 72.0, 75.0], [76.1, 75.0, 78.0],
+        [84.0, 83.0, 86.0], [88.9, 88.0, 91.0], [98.0, 97.0, 100.0], [101.6, 100.5, 103.5], [104.0, 103.0, 106.0], [108.0, 107.0, 110.0],
+        [110.0, 109.0, 112.0], [114.3, 113.0, 116.0], [118.0, 117.0, 120.0], [127.0, 126.0, 129.0], [129.0, 128.0, 131.0], [133.0, 132.0, 135.0],
+        [139.7, 139.0, 142.0], [141.3, 140.5, 143.5], [144.0, 143.0, 146.0], [154.0, 153.0, 156.0], [159.0, 158.0, 161.0], [165.0, 164.0, 167.0],
+        [168.3, 167.0, 170.0], [170.0, 169.0, 172.0], [193.7, 193.0, 196.0], [219.1, 218.0, 221.0], [222.0, 221.0, 224.0], [244.5, 243.5, 245.5],
+        [267.0, 266.0, 269.0], [273.0, 272.0, 275.0], [323.9, 323.0, 326.0], [326.0, 325.0, 328.0], [355.6, 354.5, 357.5], [378.0, 377.0, 380.0],
+        [406.4, 405.0, 408.0], [429.0, 428.0, 431.0], [457.2, 456.0, 459.0], [508.0, 507.0, 510.0], [558.8, 558.0, 561.0], [609.6, 608.5, 611.5],
+        [660.4, 659.5, 662.5], [711.0, 710.0, 713.0]]),
+      materials: { ...ok(['steel', 'stainless', 'di', 'dis'], 'Designed for metal pipes.'),
+        pe: ['caution', 'Only with a supporting ring inserted; tensile capacity limited.'],
+        pvc: ['caution', 'Hard plastics only with a supporting ring inserted; tensile capacity limited.'],
+        grp: ['caution', 'Only with a supporting ring inserted; tensile capacity limited.'] },
+      notes: ['Narrow tolerance per size. Above 429 mm the brochure gives only reduced industrial pressures.'],
+      sources: ['teekay'] },
+  ];
+
+  /* Teekay Axiflex stepped coupling (made to order): band of the SMALLER
+   * pipe OD and the largest OD step available in that band (brochure p.18). */
+  const steppedTeekay = { maker: 'Teekay', name: 'Axiflex stepped coupling (made to order)', restraint: 'none', source: 'teekay',
+    bands: [[48.3, 82.5, 5], [83.0, 99.0, 12], [100.0, 150.0, 15], [151.0, 200.0, 20], [201.0, 286.0, 25], [287.0, 349.0, 25],
+      [350.0, 453.0, 25], [454.0, 950.0, 25], [951.0, 1150.0, 25], [1151.0, 1650.0, 25]],
+    materials: ['steel', 'stainless', 'di', 'dis', 'ci', 'ac', 'grp', 'concrete'],
+    note: 'Band = OD of the smaller pipe; increment = largest OD difference one casing can take (brochure p.18). Axiflex is listed for carbon steel, stainless, cast iron, concrete, asbestos cement, GRP and composite pipes. Not end-load resistant.' };
+
+  // EN 545:2010 Table 9 cement-mortar lining, nominal mm: [DN from, DN to, thickness]
+  const liningEN545 = [[40, 300, 4], [350, 600, 5], [700, 1200, 6]];
+
+  return { sources, services, materials, series, peDnEquiv, couplings, steppedTeekay, liningEN545 };
+})();
+
+if (typeof module !== 'undefined') module.exports = { PIPE_DATA };

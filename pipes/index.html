@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipe Reference</title>
+<!-- Web-app (PWA) bits: lets a hosted copy be installed with "Add to Home screen". -->
+<meta name="theme-color" content="#0b5cad">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pipe Reference">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<!--
+  Pipe Reference — index.html
+  ---------------------------------------------------------------
+  The screen only: layout (HTML), looks (CSS) and the code that reads
+  the inputs and shows results (JavaScript at the bottom).
+    pipe-data.js     every number, with its source   (global PIPE_DATA)
+    pipe-logic.js    look-ups and coupling matching  (global PipeLogic)
+    pipe-drawing.js  scaled cross-section SVGs       (global PipeDrawing)
+  Everything on this page is scoped under .pr-app / pr- ids so it can be
+  merged with Flange ID later without clashes.
+-->
+<style>
+  .pr-app {
+    --bg: #f3f5f8; --card: #fff; --ink: #1d2733; --muted: #5d6b7a; --line: #dde3ea;
+    --brand: #0b5cad; --good: #1a8a4a; --close: #c98a00; --bad: #c0392b; --flag: #a05a00;
+  }
+  .pr-app, .pr-app * { box-sizing: border-box; }
+  .pr-app [hidden] { display: none !important; }
+  body.pr-app { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  .pr-app header { background: var(--brand); color: #fff; padding: 14px 16px; }
+  .pr-app header h1 { margin: 0; font-size: 1.3rem; }
+  .pr-app header p { margin: 2px 0 0; opacity: .85; font-size: .9rem; }
+  .pr-app .pr-main { max-width: 1100px; margin: 0 auto; padding: 12px; display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .pr-app .pr-main.pr-split { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: start; }
+    .pr-app .pr-side { position: sticky; top: 12px; } }
+  .pr-app .pr-main > * { min-width: 0; }
+  .pr-app .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .pr-app h2 { font-size: 1.05rem; margin: 0 0 10px; }
+  .pr-app h3 { font-size: .95rem; margin: 12px 0 6px; }
+  .pr-app .field { margin-bottom: 10px; }
+  .pr-app .field label { display: block; font-weight: 600; font-size: .9rem; }
+  .pr-app .field .hint { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+  .pr-app .field input, .pr-app .field select { width: 100%; padding: 9px 10px; font-size: 1rem; border: 1px solid #b9c3cf; border-radius: 7px; background: #fff; }
+  .pr-app .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pr-app .seg { display: flex; border: 1px solid #b9c3cf; border-radius: 7px; overflow: hidden; background: #fff; }
+  .pr-app .seg button { flex: 1; padding: 8px; border: 0; background: #fff; font-size: .9rem; cursor: pointer; color: var(--ink); }
+  .pr-app .seg button.on { background: var(--brand); color: #fff; }
+  .pr-app .pr-modes { max-width: 1100px; margin: 12px auto 0; padding: 0 12px; }
+  .pr-app .pr-modes .seg button { padding: 10px 4px; font-weight: 600; font-size: .92rem; }
+  .pr-app .stepper { display: grid; grid-template-columns: 48px 1fr 48px; gap: 6px; }
+  .pr-app .stepper button { font-size: 1.2rem; border: 1px solid var(--brand); background: #fff; color: var(--brand); border-radius: 7px; cursor: pointer; }
+  .pr-app .stepper button:disabled { opacity: .35; cursor: default; }
+  .pr-app .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .88rem; }
+  .pr-app .checks label { display: inline-flex; align-items: center; gap: 5px; font-weight: 400; }
+  .pr-app .note { font-size: .82rem; color: var(--muted); margin: 4px 0; }
+  .pr-app .flag { background: #fff6e8; border-left: 4px solid var(--flag); padding: 6px 10px; font-size: .82rem; margin: 6px 0; border-radius: 4px; }
+  .pr-app .twin { background: #eef6ff; border-left: 4px solid var(--brand); padding: 8px 10px; font-size: .86rem; margin: 8px 0; border-radius: 4px; }
+  .pr-app .pill { display: inline-block; font-size: .72rem; padding: 1px 7px; border-radius: 10px; background: #e8edf2; margin: 0 3px 2px 0; white-space: nowrap; }
+  .pr-app .pill.good { background: #e5f5ec; color: var(--good); }
+  .pr-app .pill.caution { background: #fff3d6; color: #8a5d00; }
+  .pr-app .pill.bad { background: #fdecea; color: var(--bad); }
+  .pr-app .pill.unlisted { background: #eef0f3; color: var(--muted); }
+  .pr-app .empty { color: var(--muted); text-align: center; padding: 24px 10px; }
+  .pr-app .scroll { overflow-x: auto; }
+  .pr-app table.data { border-collapse: collapse; font-size: .82rem; width: 100%; }
+  .pr-app table.data th, .pr-app table.data td { border: 1px solid var(--line); padding: 4px 6px; text-align: right; white-space: nowrap; }
+  .pr-app table.data th { background: #f0f3f7; position: sticky; top: 0; z-index: 1; }
+  .pr-app table.data td.l, .pr-app table.data th.l { text-align: left; white-space: normal; }
+  .pr-app table.data td small { display: block; color: var(--muted); font-size: .7rem; }
+  .pr-app table.data tbody tr { cursor: pointer; }
+  .pr-app table.data tbody tr:hover { background: #f5f8fc; }
+  .pr-app table.data tr.sel td { background: #dcebff; }
+  .pr-app table.data tr.grp td { background: #f7f9fb; font-weight: 700; text-align: left; cursor: default; }
+  .pr-app .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+  .pr-app .pr-tablewrap { max-height: 560px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+  .pr-app .pr-svg svg { display: block; width: 100%; max-width: 380px; height: auto; margin: 0 auto; }
+  .pr-app table.pr-suit { border-collapse: collapse; width: 100%; font-size: .84rem; }
+  .pr-app table.pr-suit td { padding: 4px 4px; border-bottom: 1px solid #f0f2f5; vertical-align: top; }
+  .pr-app table.pr-suit td:first-child { font-weight: 600; width: 34%; }
+  .pr-app ul.pr-list { margin: 4px 0 8px; padding-left: 18px; font-size: .86rem; }
+  .pr-app .cpl { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; margin-bottom: 8px; background: #fff; }
+  .pr-app .cpl.good { border-left: 4px solid var(--good); }
+  .pr-app .cpl.caution { border-left: 4px solid var(--close); }
+  .pr-app .cpl.bad { border-left: 4px solid var(--bad); opacity: .8; }
+  .pr-app .cpl.unlisted { border-left: 4px solid #b9c3cf; }
+  .pr-app .cpl .t { font-weight: 700; }
+  .pr-app .cpl .s { color: var(--muted); font-size: .82rem; }
+  .pr-app .cpl a, .pr-app footer a, .pr-app .note a { color: var(--brand); }
+  .pr-app details summary { cursor: pointer; color: var(--brand); font-size: .9rem; margin: 6px 0; }
+  .pr-app .pr-verdict { padding: 8px 10px; border-radius: 6px; font-size: .9rem; font-weight: 600; margin-bottom: 8px; }
+  .pr-app .pr-verdict.good { background: #e5f5ec; color: var(--good); }
+  .pr-app .pr-verdict.caution { background: #fff3d6; color: #8a5d00; }
+  .pr-app .pr-verdict.bad { background: #fdecea; color: var(--bad); }
+  .pr-app footer { max-width: 1100px; margin: 0 auto; padding: 8px 14px 30px; font-size: .78rem; color: var(--muted); }
+  @media (max-width: 480px) { .pr-app table.data th, .pr-app table.data td { padding: 3px 4px; } .pr-app .pr-hide-sm { display: none; } }
+</style>
+</head>
+<body class="pr-app">
+<header>
+  <h1>Pipe Reference</h1>
+  <p>Pipe ODs, walls and bores, materials, and which couplings and flange adaptors fit.</p>
+</header>
+
+<nav class="pr-modes">
+  <div class="seg" id="pr-modeSeg">
+    <button type="button" data-mode="size" class="on">📏 By size</button>
+    <button type="button" data-mode="couple">🔗 Couplings</button>
+    <button type="button" data-mode="browse">📖 Browse</button>
+  </div>
+</nav>
+
+<!-- ================= BY SIZE ================= -->
+<main class="pr-main pr-split" id="pr-sizeMain">
+  <section class="card">
+    <h2>Pick a nominal size</h2>
+    <div class="field">
+      <div class="stepper">
+        <button type="button" id="pr-dnPrev" aria-label="Smaller DN">‹</button>
+        <select id="pr-dn" aria-label="Nominal size DN"></select>
+        <button type="button" id="pr-dnNext" aria-label="Larger DN">›</button>
+      </div>
+    </div>
+    <div class="checks" style="margin-bottom:8px">
+      <label><input type="checkbox" id="pr-showPlastic" checked> Include plastics sized by OD</label>
+    </div>
+    <div class="note">ID = OD − 2 × wall, <b>nominal</b> (no tolerances, no lining). “min” = the standard gives a minimum wall.
+      Plastics are sized by OD: <b>≈DN</b> = equivalent bore (PE), <b>~DN</b> = OD close to steel of that DN. Tap a row for the drawing, materials and couplings.</div>
+    <div class="pr-tablewrap scroll" style="margin-top:8px">
+      <table class="data" id="pr-sizeTable"></table>
+    </div>
+  </section>
+
+  <aside class="pr-side" id="pr-detail">
+    <section class="card">
+      <h2 id="pr-detTitle">Cross-section</h2>
+      <div class="pr-svg" id="pr-drawing"><div class="empty">Tap a row to see it drawn to scale.</div></div>
+      <div class="checks" id="pr-linWrap" hidden><label><input type="checkbox" id="pr-showLining" checked> Show cement-mortar lining (EN 545 nominal)</label></div>
+      <div id="pr-rowNotes"></div>
+    </section>
+    <section class="card" id="pr-fitCard" hidden>
+      <h2>Couplings &amp; flange adaptors for this OD</h2>
+      <div id="pr-fits"></div>
+    </section>
+    <section class="card" id="pr-matCard" hidden>
+      <h2 id="pr-matTitle">Material</h2>
+      <div id="pr-mat"></div>
+    </section>
+  </aside>
+</main>
+
+<!-- ================= COUPLINGS ================= -->
+<main class="pr-main pr-split" id="pr-coupleMain" hidden>
+  <section class="card">
+    <h2>Pipe A</h2>
+    <div class="row2">
+      <div class="field"><label for="pr-aMat">Material</label><select id="pr-aMat"></select></div>
+      <div class="field"><label for="pr-aOd">Measured OD (mm)</label><input id="pr-aOd" type="number" inputmode="decimal" step="any" placeholder="e.g. 118"></div>
+    </div>
+    <div class="field"><label for="pr-aPick">…or pick a standard size</label><select id="pr-aPick"></select></div>
+    <div class="checks" style="margin:6px 0 10px"><label><input type="checkbox" id="pr-twoOn"> Joining to a different pipe (Pipe B)</label></div>
+    <div id="pr-bWrap" hidden>
+      <h2>Pipe B</h2>
+      <div class="row2">
+        <div class="field"><label for="pr-bMat">Material</label><select id="pr-bMat"></select></div>
+        <div class="field"><label for="pr-bOd">Measured OD (mm)</label><input id="pr-bOd" type="number" inputmode="decimal" step="any" placeholder="e.g. 110"></div>
+      </div>
+      <div class="field"><label for="pr-bPick">…or pick a standard size</label><select id="pr-bPick"></select></div>
+    </div>
+    <div class="note">Measure the OD with a pi tape where you can — old pipe is often oval, corroded or over-coated.
+      Ranges are the makers’ published sealing ranges; ✓/⚠/✗ are the makers’ own pipe-material statements.</div>
+    <div class="pr-svg" id="pr-twoDraw" style="margin-top:8px"></div>
+  </section>
+  <section class="card">
+    <h2 id="pr-cplTitle">What fits</h2>
+    <div id="pr-cplOut"><div class="empty">Enter an OD or pick a size.</div></div>
+    <details id="pr-catalogue"><summary>All coupling products in this app, with sources</summary><div id="pr-catList"></div></details>
+  </section>
+</main>
+
+<!-- ================= BROWSE ================= -->
+<main class="pr-main" id="pr-browseMain" hidden>
+  <section class="card">
+    <h2>Browse and search</h2>
+    <div class="row2">
+      <div class="field"><label for="pr-q">Search</label><input id="pr-q" type="search" placeholder="e.g. SDR11, C40, 114.3, Sch 40"></div>
+      <div class="field"><label for="pr-fMat">Material</label><select id="pr-fMat"></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="pr-fSvc">Suitable for</label><select id="pr-fSvc"></select></div>
+      <div class="field"><label>Rating</label>
+        <div class="seg" id="pr-fLevel"><button type="button" data-level="good" class="on">Good only</button><button type="button" data-level="possible">Good or caution</button></div>
+      </div>
+    </div>
+    <div class="note" id="pr-bCount"></div>
+    <div class="pr-tablewrap scroll"><table class="data" id="pr-bTable"></table></div>
+  </section>
+  <section class="card">
+    <h2>Materials at a glance</h2>
+    <div class="scroll"><table class="data" id="pr-suitGrid"></table></div>
+    <div class="note">General guidance only — ratings depend on the exact product, lining, joint and conditions.</div>
+  </section>
+</main>
+
+<footer>
+  <p><b>For guidance only.</b> Dimensions are from the standards and maker datasheets listed in pipe-data.js (see Sources below);
+    rows marked ⚠ could not be cross-checked or were derived. Suitability ratings are general guidance, not approvals —
+    always check the manufacturer’s data, the WRAS / Regulation 31 listing for the exact product, and the asset record,
+    and measure the OD before ordering a coupling or adaptor.</p>
+  <details><summary>Sources</summary><ul class="pr-list" id="pr-sources"></ul></details>
+  <p><a href="../">← Flange ID</a> (sister app) · Pipe Reference v1</p>
+</footer>
+
+<script src="pipe-data.js"></script>
+<script src="pipe-logic.js"></script>
+<script src="pipe-drawing.js"></script>
+<script>
+/* ---------------- screen code (global PipeUI only) ---------------- */
+const PipeUI = (() => {
+  const L = PipeLogic, D = L.data, MAT = L.MAT;
+  const $ = (id) => document.getElementById('pr-' + id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const n = (x) => (x == null ? '—' : String(L.round(x, 2)));
+  const store = { get: (k, d) => { try { const v = localStorage.getItem('pipeRef.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: (k, v) => { try { localStorage.setItem('pipeRef.' + k, JSON.stringify(v)); } catch (e) { /* private mode */ } } };
+  const RATE = { good: '✓ good', caution: '⚠ caution', bad: '✗ unsuitable', unlisted: '– not listed' };
+  const pill = (r, txt) => `<span class="pill ${r}">${esc(txt || RATE[r] || r)}</span>`;
+  const src = (ids) => (ids || []).map((id) => D.sources[id]).filter(Boolean)
+    .map((s) => s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)).join(' · ');
+  const swatch = (m) => `<span class="swatch" style="background:${MAT[m].colour}"></span>`;
+  const dnTag = (r) => r.dnBasis === 'matching' ? `≈DN${r.dn}` : r.dnBasis === 'similar' ? `~DN${r.dn}` : `DN${r.dn}`;
+
+  const st = { dn: store.get('dn', 100), sel: null, tab: store.get('tab', 'size'), plastic: store.get('showPlastic', true) };
+  const DNS = L.dnList();
+
+  /* ---------- tabs ---------- */
+  function setTab(t) {
+    st.tab = t; store.set('tab', t);
+    document.querySelectorAll('#pr-modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === t));
+    $('sizeMain').hidden = t !== 'size'; $('coupleMain').hidden = t !== 'couple'; $('browseMain').hidden = t !== 'browse';
+    if (t === 'browse') renderBrowse();
+  }
+
+  /* ---------- BY SIZE ---------- */
+  function rowHTML(r, cols) {
+    const sel = st.sel === r.key ? ' sel' : '';
+    const flag = r.flag ? ` <span title="${esc(r.flag)}">⚠</span>` : '';
+    const sub = [r.nps, r.dnBasis !== 'nominal' ? dnTag(r) : null, r.wallBasis === 'derived' ? 'wall derived' : null].filter(Boolean).join(' · ');
+    const cells = { mat: `<td class="l pr-hide-sm">${esc(MAT[r.material].short)}</td>`,
+      dn: `<td>${esc(dnTag(r))}</td>` };
+    return `<tr class="${sel}" data-key="${esc(r.key)}">${cols.includes('mat') ? cells.mat : ''}`
+      + `<td class="l">${cols.includes('mat') ? swatch(r.material) : ''}${esc(r.standard)} <b>${esc(r.cls)}</b>${flag}${sub ? `<small>${esc(sub)}</small>` : ''}</td>`
+      + `${cols.includes('dn') ? cells.dn : ''}<td><b>${n(r.od)}</b></td><td>${n(r.wall)}${r.wallBasis === 'minimum' ? '<small>min</small>' : ''}</td><td>${n(r.id)}</td></tr>`;
+  }
+
+  function renderSize() {
+    if (!DNS.includes(st.dn)) st.dn = 100;
+    $('dn').value = st.dn; store.set('dn', st.dn);
+    $('dnPrev').disabled = DNS.indexOf(st.dn) <= 0; $('dnNext').disabled = DNS.indexOf(st.dn) >= DNS.length - 1;
+    const rows = L.rowsForDN(st.dn, { basis: st.plastic ? 'all' : 'nominal' });
+    let html = '<thead><tr><th class="l">Standard · class</th><th>OD</th><th>Wall</th><th>ID nom.</th></tr></thead><tbody>';
+    let last = null;
+    for (const r of rows) {
+      if (r.material !== last) { last = r.material; html += `<tr class="grp"><td colspan="4">${swatch(r.material)}${esc(MAT[r.material].name)}</td></tr>`; }
+      html += rowHTML(r, []);
+    }
+    if (!rows.length) html += '<tr><td colspan="4" class="l">No rows for this DN.</td></tr>';
+    $('sizeTable').innerHTML = html + '</tbody>';
+    if (!rows.find((r) => r.key === st.sel)) st.sel = (rows.find((r) => r.wall != null) || rows[0] || {}).key || null;
+    markSel(); renderDetail();
+  }
+  function markSel() { document.querySelectorAll('#pr-sizeTable tbody tr[data-key]').forEach((tr) => tr.classList.toggle('sel', tr.dataset.key === st.sel)); }
+
+  function renderDetail() {
+    const r = L.ROWS.find((x) => x.key === st.sel);
+    if (!r) { $('fitCard').hidden = $('matCard').hidden = true; return; }
+    const m = MAT[r.material], s = L.SERIES[r.seriesId];
+    $('detTitle').textContent = `${m.short} · ${s.standard} ${r.cls} · ${dnTag(r)}`;
+    $('linWrap').hidden = !(r.lining && r.wall != null);
+    $('drawing').innerHTML = PipeDrawing.crossSection(r, { colour: m.colour, lining: $('showLining').checked });
+    let notes = '';
+    if (r.flag) notes += `<div class="flag">⚠ ${esc(r.flag)}</div>`;
+    if (r.wall == null) notes += '<div class="note">The standard/source gives the OD only for this row, so no ID is shown.</div>';
+    if (r.wallBasis === 'minimum') notes += '<div class="note">Wall is the standard’s <b>minimum</b>; the real wall is usually a little thicker, so the real bore is a little smaller.</div>';
+    if (r.dnBasis === 'matching') notes += `<div class="note">≈DN${r.dn}: PE ${r.od} mm is the usual equivalent-bore replacement for DN${r.dn}.</div>`;
+    if (r.dnBasis === 'similar') notes += `<div class="note">~DN${r.dn}: OD is within 10% of DN${r.dn} steel — similar outside size, not an equivalent bore.</div>`;
+    (s.notes || []).forEach((t) => { notes += `<div class="note">${esc(t)}</div>`; });
+    notes += `<div class="note">Source: ${src(r.sources)}</div>`;
+    $('rowNotes').innerHTML = notes;
+    $('fitCard').hidden = false;
+    $('fits').innerHTML = fitsHTML(r.od, r.material, true);
+    $('matCard').hidden = false; $('matTitle').textContent = m.name; $('mat').innerHTML = materialHTML(m);
+  }
+
+  function materialHTML(m) {
+    let h = '<h3>Coatings (outside)</h3><ul class="pr-list">' + m.coatings.map((c) => `<li>${esc(c)}</li>`).join('') + '</ul>';
+    h += '<h3>Linings (inside)</h3><ul class="pr-list">' + m.linings.map((c) => `<li>${esc(c)}</li>`).join('') + '</ul>';
+    h += '<h3>Suitability</h3><table class="pr-suit">' + D.services.map((s) => {
+      const v = m.suit[s.key]; return v ? `<tr><td>${esc(s.label)}</td><td>${pill(v[0])} ${esc(v[1])}</td></tr>` : '';
+    }).join('') + '</table>';
+    (m.notes || []).forEach((t) => { h += `<div class="note">${esc(t)}</div>`; });
+    h += '<div class="flag">General guidance only. Check the manufacturer’s data and the WRAS / Reg 31 listing for the exact pipe, lining and fittings.</div>';
+    return h;
+  }
+
+  /* ---------- couplings ---------- */
+  function cplHTML(hit, od) {
+    const c = hit.coupling, r = hit.rating || ['unlisted', ''];
+    const range = c.kind === 'exact' ? `for ${hit.min} mm OD pipe` : `${hit.label}: ${hit.min}–${hit.max} mm`;
+    const restr = c.restraint === 'none' ? 'not end-load resistant' : c.restraint === 'restrained*' ? 'restrained on some materials' : 'end-load resistant';
+    let h = `<div class="cpl ${r[0]}"><div class="t">${esc(c.maker)} ${esc(c.name)}</div>`;
+    h += `<div class="s"><span class="pill">${c.type === 'flangeAdaptor' ? 'flange adaptor' : 'coupling'}</span><span class="pill">${esc(restr)}</span>${hit.rating ? pill(r[0]) : ''}</div>`;
+    h += `<div>${esc(range)}${hit.extra ? ` · <span class="s">${esc(hit.extra)}</span>` : ''}</div>`;
+    if (hit.rating && r[1]) h += `<div class="s">${esc(r[1])}</div>`;
+    if (hit.nearEdge) h += `<div class="flag">${od} mm is within 1 mm of the end of this range — measure carefully and check the next size.</div>`;
+    const restrNote = c.restraint === 'none' ? '<div class="s">Not end-load resistant — thrust must be restrained another way.</div>' : '';
+    h += restrNote + `<details><summary>Pressure, notes and source</summary><div class="s">${esc(c.pressure)}</div>`;
+    (c.notes || []).forEach((t) => { h += `<div class="s">${esc(t)}</div>`; });
+    return h + `<div class="s">Source: ${src(c.sources)}</div></details></div>`;
+  }
+  function fitsHTML(od, mat, compact) {
+    const hits = L.matchCouplings(od, mat);
+    if (!hits.length) return `<div class="empty">No product in this app lists ${od} mm. This is not a full catalogue — ask the makers.</div>`;
+    const by = (t) => hits.filter((h) => h.coupling.type === t);
+    let h = '';
+    if (mat === 'pe') h += '<div class="flag">PE: most wide-range fittings need a stainless support liner / insert, and only end-load-resistant types hold PE in tension. Check each note below.</div>';
+    for (const [t, title] of [['coupling', 'Couplings'], ['flangeAdaptor', 'Flange adaptors']]) {
+      const list = by(t); if (!list.length) continue;
+      h += `<h3>${title} (${list.length})</h3>` + list.map((x) => cplHTML(x, od)).join('');
+    }
+    return h;
+  }
+
+  function sizeOptions(mat) {
+    const rows = L.ROWS.filter((r) => r.material === mat);
+    const seen = new Set(), opts = ['<option value="">— pick —</option>'];
+    rows.sort((a, b) => a.od - b.od).forEach((r) => {
+      const k = r.od + '|' + r.standard; if (seen.has(k)) return; seen.add(k);
+      opts.push(`<option value="${r.od}">${esc(dnTag(r))} · ${n(r.od)} mm · ${esc(r.standard)}${r.flag ? ' ⚠' : ''}</option>`);
+    });
+    return opts.join('');
+  }
+
+  function renderCouple() {
+    const aMat = $('aMat').value, aOd = parseFloat($('aOd').value);
+    const two = $('twoOn').checked; $('bWrap').hidden = !two;
+    const bMat = $('bMat').value, bOd = parseFloat($('bOd').value);
+    store.set('couple', { aMat, aOd: $('aOd').value, two, bMat, bOd: $('bOd').value });
+    $('twoDraw').innerHTML = '';
+    if (!(aOd > 0)) { $('cplTitle').textContent = 'What fits'; $('cplOut').innerHTML = '<div class="empty">Enter an OD or pick a size.</div>'; return; }
+    if (!two || !(bOd > 0)) {
+      $('cplTitle').textContent = `What fits ${aOd} mm ${MAT[aMat].short}`;
+      $('cplOut').innerHTML = fitsHTML(aOd, aMat); return;
+    }
+    $('twoDraw').innerHTML = PipeDrawing.twoPipe(aOd, bOd, MAT[aMat].colour, '#c98a00');
+    const t = L.twoPipe(aOd, aMat, bOd, bMat);
+    $('cplTitle').textContent = `Joining ${aOd} mm ${MAT[aMat].short} to ${bOd} mm ${MAT[bMat].short}`;
+    let h = `<div class="twin">OD difference: <b>${t.diff} mm</b> (${t.lo} → ${t.hi} mm).</div>`;
+    const okBoth = t.sameRange.filter((x) => x.ratingA[0] !== 'bad' && x.ratingB[0] !== 'bad');
+    h += okBoth.length ? `<div class="pr-verdict good">✓ ${okBoth.length} wide-range coupling size(s) cover both ODs in one fitting.</div>`
+      : t.stepped.length ? '<div class="pr-verdict caution">~ No single wide-range coupling spans both — a made-to-order stepped coupling can.</div>'
+      : '<div class="pr-verdict bad">✗ No single coupling in this app spans both ODs — use a flange adaptor on each pipe, or ask the makers for a stepped coupling.</div>';
+    if (t.sameRange.length) {
+      h += '<h3>One coupling covers both</h3>' + t.sameRange.map((x) => {
+        const c = x.coupling; return `<div class="cpl ${x.ratingA[0] === 'good' && x.ratingB[0] === 'good' ? 'good' : 'caution'}"><div class="t">${esc(c.maker)} ${esc(c.name)}</div>
+          <div>${esc(x.label)}: ${x.min}–${x.max} mm</div>
+          <div class="s">Pipe A (${esc(MAT[aMat].short)}): ${pill(x.ratingA[0])} ${esc(x.ratingA[1])}</div>
+          <div class="s">Pipe B (${esc(MAT[bMat].short)}): ${pill(x.ratingB[0])} ${esc(x.ratingB[1])}</div>
+          ${c.restraint === 'none' ? '<div class="s">Not end-load resistant.</div>' : ''}
+          <details><summary>Pressure, notes and source</summary><div class="s">${esc(c.pressure)}</div>${(c.notes || []).map((z) => `<div class="s">${esc(z)}</div>`).join('')}
+          <div class="s">Source: ${src(c.sources)}</div></details></div>`; }).join('');
+      h += '<div class="note">Check the seal range covers both ends with margin; wide-range couplings take a step within one range because each end seals independently.</div>';
+    }
+    if (t.stepped.length) {
+      const x = t.stepped[0], s = x.coupling;
+      h += `<h3>Stepped coupling</h3><div class="cpl ${x.okA && x.okB ? 'good' : 'caution'}"><div class="t">${esc(s.maker)} ${esc(s.name)}</div>
+        <div>Band ${x.band[0]}–${x.band[1]} mm, steps up to +${x.band[2]} mm</div>
+        <div class="s">${x.okA && x.okB ? 'Both materials are on the maker’s list.' : 'One of the materials is not on the maker’s list for Axiflex.'}</div>
+        <div class="s">${esc(s.note)}</div><div class="s">Source: ${src([s.source])}</div></div>`;
+    }
+    h += '<h3>Flange adaptor pair</h3><div class="note">One flange adaptor on each pipe, bolted face to face — the flanges must match (DN and PN drilling).</div>';
+    const faList = (list, od) => list.length ? list.map((x) => cplHTML(x, od)).join('') : '<div class="empty">None listed for this OD.</div>';
+    h += `<details><summary>Pipe A ${aOd} mm — ${t.adaptorPair.a.length} flange adaptor option(s)</summary>${faList(t.adaptorPair.a, aOd)}</details>`;
+    h += `<details><summary>Pipe B ${bOd} mm — ${t.adaptorPair.b.length} flange adaptor option(s)</summary>${faList(t.adaptorPair.b, bOd)}</details>`;
+    $('cplOut').innerHTML = h;
+  }
+
+  function renderCatalogue() {
+    $('catList').innerHTML = D.couplings.map((c) => {
+      const mins = c.ranges.map((r) => r[1]), maxs = c.ranges.map((r) => r[2]);
+      const mats = Object.entries(c.materials).map(([k, v]) => pill(v[0], `${MAT[k] ? MAT[k].short : k}`)).join('');
+      const rows = c.ranges.map((r) => `<tr><td class="l">${esc(r[0])}</td><td>${r[1]}</td><td>${r[2]}</td><td class="l">${esc(r[3] || '')}</td></tr>`).join('');
+      return `<div class="cpl"><div class="t">${esc(c.maker)} ${esc(c.name)}</div>
+        <div class="s">${c.ranges.length} sizes · ${Math.min(...mins)}–${Math.max(...maxs)} mm · ${esc(c.pressure)}</div><div>${mats}</div>
+        <details><summary>Ranges</summary><div class="scroll"><table class="data"><thead><tr><th class="l">Size</th><th>Min</th><th>Max</th><th class="l">Flange / note</th></tr></thead><tbody>${rows}</tbody></table></div></details>
+        <div class="s">Source: ${src(c.sources)}</div></div>`;
+    }).join('') + `<div class="cpl"><div class="t">${esc(D.steppedTeekay.maker)} ${esc(D.steppedTeekay.name)}</div><div class="s">${esc(D.steppedTeekay.note)}</div>
+      <div class="s">${D.steppedTeekay.bands.map((b) => `${b[0]}–${b[1]} mm: +${b[2]}`).join(' · ')}</div><div class="s">Source: ${src([D.steppedTeekay.source])}</div></div>`;
+  }
+
+  /* ---------- BROWSE ---------- */
+  let level = 'good';
+  function renderBrowse() {
+    const f = { q: $('q').value, material: $('fMat').value || null, service: $('fSvc').value || null, level };
+    const rows = L.filterRows(L.ROWS, f), MAX = 400;
+    $('bCount').textContent = `${rows.length} rows${rows.length > MAX ? ` — showing the first ${MAX}; narrow the search` : ''}.`;
+    $('bTable').innerHTML = '<thead><tr><th class="l pr-hide-sm">Material</th><th class="l">Standard · class</th><th>DN</th><th>OD</th><th>Wall</th><th>ID nom.</th></tr></thead><tbody>'
+      + rows.slice(0, MAX).map((r) => rowHTML(r, ['mat', 'dn'])).join('') + '</tbody>';
+  }
+  function renderSuitGrid() {
+    const sym = { good: '✓', caution: '~', bad: '✗' };
+    $('suitGrid').innerHTML = '<thead><tr><th class="l">Material</th>' + D.services.map((s) => `<th>${esc(s.label)}</th>`).join('') + '</tr></thead><tbody>'
+      + D.materials.map((m) => `<tr><td class="l">${swatch(m.id)}${esc(m.short)}</td>` + D.services.map((s) => {
+        const v = m.suit[s.key]; return v ? `<td title="${esc(v[1])}" style="text-align:center">${pill(v[0], sym[v[0]])}</td>` : '<td></td>';
+      }).join('') + '</tr>').join('') + '</tbody>';
+  }
+
+  /* ---------- wiring ---------- */
+  function init() {
+    $('dn').innerHTML = DNS.map((d) => `<option value="${d}">DN ${d}</option>`).join('');
+    $('showPlastic').checked = st.plastic;
+    const matOpts = D.materials.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+    $('aMat').innerHTML = $('bMat').innerHTML = matOpts;
+    $('fMat').innerHTML = '<option value="">All materials</option>' + matOpts;
+    $('fSvc').innerHTML = '<option value="">Any service</option>' + D.services.map((s) => `<option value="${s.key}">${esc(s.label)}</option>`).join('');
+    $('sources').innerHTML = Object.values(D.sources).map((s) => `<li>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}</li>`).join('');
+
+    document.querySelectorAll('#pr-modeSeg button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.mode)));
+    $('dn').addEventListener('change', () => { st.dn = +$('dn').value; st.sel = null; renderSize(); });
+    $('dnPrev').addEventListener('click', () => { st.dn = DNS[Math.max(0, DNS.indexOf(st.dn) - 1)]; st.sel = null; renderSize(); });
+    $('dnNext').addEventListener('click', () => { st.dn = DNS[Math.min(DNS.length - 1, DNS.indexOf(st.dn) + 1)]; st.sel = null; renderSize(); });
+    $('showPlastic').addEventListener('change', () => { st.plastic = $('showPlastic').checked; store.set('showPlastic', st.plastic); renderSize(); });
+    $('showLining').addEventListener('change', renderDetail);
+    $('sizeTable').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-key]'); if (!tr) return; st.sel = tr.dataset.key; markSel(); renderDetail();
+      if (window.innerWidth < 900) $('detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    $('bTable').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-key]'); if (!tr) return;
+      const r = L.ROWS.find((x) => x.key === tr.dataset.key); if (!r || r.dn == null) return;
+      st.dn = r.dn; st.sel = r.key; if (r.dnBasis !== 'nominal') { st.plastic = true; $('showPlastic').checked = true; }
+      setTab('size'); renderSize(); st.sel = r.key; markSel(); renderDetail(); window.scrollTo(0, 0); });
+
+    const c = store.get('couple', {});
+    if (c.aMat) $('aMat').value = c.aMat; else $('aMat').value = 'di';
+    if (c.bMat) $('bMat').value = c.bMat; else $('bMat').value = 'pe';
+    $('aOd').value = c.aOd || ''; $('bOd').value = c.bOd || ''; $('twoOn').checked = !!c.two;
+    const fillPick = (w) => { $(w + 'Pick').innerHTML = sizeOptions($(w + 'Mat').value); };
+    fillPick('a'); fillPick('b');
+    ['a', 'b'].forEach((w) => {
+      $(w + 'Mat').addEventListener('change', () => { fillPick(w); renderCouple(); });
+      $(w + 'Pick').addEventListener('change', () => { if ($(w + 'Pick').value) { $(w + 'Od').value = $(w + 'Pick').value; renderCouple(); } });
+      $(w + 'Od').addEventListener('input', renderCouple);
+    });
+    $('twoOn').addEventListener('change', renderCouple);
+    ['q', 'fMat', 'fSvc'].forEach((id) => $(id).addEventListener('input', renderBrowse));
+    document.querySelectorAll('#pr-fLevel button').forEach((b) => b.addEventListener('click', () => {
+      level = b.dataset.level; document.querySelectorAll('#pr-fLevel button').forEach((x) => x.classList.toggle('on', x === b)); renderBrowse(); }));
+
+    renderSize(); renderCouple(); renderCatalogue(); renderSuitGrid(); setTab(st.tab);
+
+    // Offline support when hosted (not when opened as a local file).
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  return { init, setTab, state: st };
+})();
+PipeUI.init();
+</script>
+</body>
+</html>
