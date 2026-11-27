@@ -42,12 +42,14 @@ const PipeLogic = (() => {
           else { dn = similarDN(v.od); dnBasis = dn != null ? 'similar' : null; }
         }
         const key = c.includes('dn') ? v.dn : v.od;
+        const mat = MAT[s.material];
         const flag = (s.unverified && s.unverified[key]) || null;
         const wall = v.wall ?? null;
         const bore = wall != null ? round(v.od - 2 * wall, 2) : null;
         out.push({
           key: s.id + ':' + key, seriesId: s.id, material: s.material, standard: s.standard, cls: s.cls, label: s.label,
-          dn, dnBasis, nps: v.nps || null, od: v.od, wall, id: bore, wallBasis: wall != null ? s.wallBasis : null,
+          dn, dnBasis, nps: v.nps || null, nom: v.nom || null, od: v.od,
+          family: mat.family, sub: mat.sub, galv: !!(s.finishes && s.finishes.includes('galvanised')), wall, id: bore, wallBasis: wall != null ? s.wallBasis : null,
           lining: s.lining === 'en545' && dn ? liningFor(dn) : null, flag, sources: s.sources,
           ukCommon: !!(s.ukCommon && s.ukCommon.ok), ukReason: (s.ukCommon && s.ukCommon.reason) || '',
         });
@@ -60,15 +62,61 @@ const PipeLogic = (() => {
   const sortRows = (a, b) => MAT_ORDER.indexOf(a.material) - MAT_ORDER.indexOf(b.material) || a.od - b.od
     || (a.wall ?? 0) - (b.wall ?? 0);
 
+  /* ---------- material family filter (All / Plastics / Metals) ----------
+   * family: 'all' | 'plastic' | 'metal'.  sub: 'all' or a sub-chip id
+   * (plastic: pvc abs pe grp · metal: steel galv stainless iron).
+   * 'other' materials (AC, clay, concrete) only show under All. */
+  const FAMILY_DEFAULT = 'all';
+  const FAMILY_IDS = D.families.map((f) => f.id);
+  function inFamily(item, family, sub) {
+    // item = a row, a material object or anything with family / sub (and galv for rows)
+    if (!family || family === 'all') return true;
+    if (item.family !== family) return false;
+    if (!sub || sub === 'all') return true;
+    if (sub === 'galv') return !!item.galv;
+    return item.sub === sub;
+  }
+  const subIds = (family) => ((D.families.find((f) => f.id === family) || { subs: [] }).subs).map((x) => x.id);
+  function materialsInFamily(family, sub) {
+    return D.materials.filter((m) => inFamily(m, family, sub === 'galv' ? 'steel' : sub)).map((m) => m.id);
+  }
+  /** Does this coupling list at least one material of the family? (Hides e.g. PE-only couplings under Metals.) */
+  function couplingInFamily(c, family, sub) {
+    if (!family || family === 'all') return true;
+    const ids = materialsInFamily(family, sub);
+    return Object.keys(c.materials).some((k) => ids.includes(k) && c.materials[k][0] !== 'bad');
+  }
+  function familyGet(storage) {
+    if (!storage || typeof storage.getItem !== 'function') return { family: FAMILY_DEFAULT, sub: 'all' };
+    try {
+      const f = JSON.parse(storage.getItem('pipeRef.family') ?? 'null');
+      const sRaw = JSON.parse(storage.getItem('pipeRef.familySub') ?? 'null');
+      const family = FAMILY_IDS.includes(f) ? f : FAMILY_DEFAULT;
+      const sub = family !== 'all' && subIds(family).includes(sRaw) ? sRaw : 'all';
+      return { family, sub };
+    } catch (e) { return { family: FAMILY_DEFAULT, sub: 'all' }; }
+  }
+  function familySet(storage, family, sub) {
+    const f = FAMILY_IDS.includes(family) ? family : FAMILY_DEFAULT;
+    const sb = f !== 'all' && subIds(f).includes(sub) ? sub : 'all';
+    storage.setItem('pipeRef.family', JSON.stringify(f));
+    storage.setItem('pipeRef.familySub', JSON.stringify(sb));
+    return { family: f, sub: sb };
+  }
+  function hiddenByFamily(rows, family, sub) {
+    return rows.filter((r) => !inFamily(r, family, sub)).length;
+  }
+
   /** All DNs that have at least one row (any basis), 15–1200. opts.ukOnly hides DNs with only non-UK rows. */
   function dnList(opts = {}) {
-    const src = opts.ukOnly ? ROWS.filter((r) => r.ukCommon) : ROWS;
+    const src = ROWS.filter((r) => (!opts.ukOnly || r.ukCommon) && inFamily(r, opts.family, opts.sub));
     return [...new Set(src.map((r) => r.dn).filter((d) => d != null && d >= 15 && d <= 1200))].sort((a, b) => a - b);
   }
 
   /** Rows for one DN. opts.basis: 'all' (default) or 'nominal' (hide similar/matching plastic rows). */
   function rowsForDN(dn, opts = {}) {
-    return ROWS.filter((r) => r.dn === dn && (opts.basis !== 'nominal' || r.dnBasis === 'nominal')).sort(sortRows);
+    return ROWS.filter((r) => r.dn === dn && (opts.basis !== 'nominal' || r.dnBasis === 'nominal')
+      && inFamily(r, opts.family, opts.sub)).sort(sortRows);
   }
 
   /** Suitability rating for a material and service key → [rating, note] or null. */
@@ -77,12 +125,13 @@ const PipeLogic = (() => {
     return (m && m.suit[service]) || null;
   }
 
-  /** Filter rows. f = { material, service, level ('good'|'possible'), q, odMin, odMax, ukOnly } */
+  /** Filter rows. f = { material, service, level ('good'|'possible'), q, ukOnly, family, sub } */
   function filterRows(rows, f = {}) {
     const q = (f.q || '').trim().toLowerCase();
     const num = q && !isNaN(+q) ? +q : null;
     return rows.filter((r) => {
       if (f.ukOnly && !r.ukCommon) return false;
+      if (!inFamily(r, f.family, f.sub)) return false;
       if (f.material && r.material !== f.material) return false;
       if (f.service) {
         const s = suit(r.material, f.service);
@@ -172,6 +221,40 @@ const PipeLogic = (() => {
     return ukOnly ? rows.filter((r) => !r.ukCommon).length : 0;
   }
 
+
+  /* ---------- Plastics tab ----------
+   * groups(opts) -> [{ group, series[], sizes[] }]  opts = { system, make, ukOnly }
+   * sizes[] = [{ od, nps, nom, dn, cells: { seriesId: row } }] sorted by OD. */
+  function plasticGroups(opts = {}) {
+    const out = [];
+    for (const g of D.plastics.groups) {
+      if (opts.system && opts.system !== 'all' && g.system !== opts.system) continue;
+      if (opts.make && opts.make !== 'all' && g.make !== opts.make) continue;
+      const ser = g.seriesIds.map((id) => SERIES[id]).filter((s) => !opts.ukOnly || (s.ukCommon && s.ukCommon.ok));
+      if (!ser.length) continue;
+      const map = new Map();
+      for (const s of ser) for (const r of ROWS.filter((x) => x.seriesId === s.id)) {
+        const k = r.nps || String(r.od);
+        const e = map.get(k) || { od: r.od, nps: r.nps, nom: r.nom, dn: r.dn, cells: {} };
+        e.cells[s.id] = r; map.set(k, e);
+      }
+      out.push({ group: g, series: ser, sizes: [...map.values()].sort((a, b) => a.od - b.od) });
+    }
+    return out;
+  }
+
+  /** Imperial PVC (BS 3505) vs the nearest metric EN 1452 OD — calculated by the app, not a maker's equivalence table. */
+  function inchVsMetric() {
+    const metricODs = [...new Set(ROWS.filter((r) => r.seriesId.startsWith('EN1452_')).map((r) => r.od))].filter((o) => o >= 20).sort((a, b) => a - b);
+    const seen = new Set(), out = [];
+    for (const r of ROWS.filter((x) => x.seriesId.startsWith('BS3505_'))) {
+      if (seen.has(r.nps)) continue; seen.add(r.nps);
+      const near = metricODs.reduce((b, o) => (Math.abs(o - r.od) < Math.abs(b - r.od) ? o : b), metricODs[0]);
+      out.push({ nps: r.nps, od: r.od, metric: near, diff: round(r.od - near, 1), interchangeable: r.nps === '2 1/2"' || r.nps === '5"' });
+    }
+    return out;
+  }
+
   /** Coverage summary for the README / report. */
   function coverage() {
     const byMat = {};
@@ -183,7 +266,8 @@ const PipeLogic = (() => {
   }
 
   return { data: D, MAT, SERIES, ROWS, similarDN, liningFor, dnList, rowsForDN, suit, filterRows,
-    matchCouplings, twoPipe, coverage, round, UK_COMMON_DEFAULT, ukCommonGet, ukCommonSet, hiddenNonUk };
+    matchCouplings, twoPipe, coverage, round, UK_COMMON_DEFAULT, ukCommonGet, ukCommonSet, hiddenNonUk,
+    FAMILY_DEFAULT, inFamily, materialsInFamily, couplingInFamily, familyGet, familySet, hiddenByFamily, plasticGroups, inchVsMetric };
 })();
 
 if (typeof module !== 'undefined') module.exports = { PipeLogic };

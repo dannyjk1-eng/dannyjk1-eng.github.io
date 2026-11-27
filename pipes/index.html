@@ -105,6 +105,24 @@
   .pr-app .pr-ukbar .hint { color: var(--muted); font-size: .82rem; font-weight: 400; }
   .pr-app .pr-ukbar .pr-ukcount { font-size: .82rem; color: var(--muted); }
   .pr-app .pill.nonuk { background: #fdecea; color: var(--bad); }
+  .pr-app .pr-fambar { max-width: 1100px; margin: 0 auto; padding: 8px 12px 0; }
+  .pr-app .pr-faminner { background: #fff; border: 2px solid var(--brand); border-radius: 10px; padding: 10px 14px; }
+  .pr-app .pr-famtitle { font-weight: 700; font-size: 1rem; margin-bottom: 6px; }
+  .pr-app .pr-famseg button { padding: 11px 4px; font-weight: 700; font-size: .95rem; }
+  .pr-app .pr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pr-app .pr-chips button { border: 1px solid var(--brand); background: #fff; color: var(--brand); border-radius: 16px; padding: 6px 14px; font-size: .88rem; cursor: pointer; }
+  .pr-app .pr-chips button.on { background: var(--brand); color: #fff; }
+  .pr-app .pr-famcount { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+  .pr-app .pr-plcard h2 { margin-bottom: 4px; }
+  .pr-app dl.pr-facts { margin: 6px 0 10px; font-size: .84rem; display: grid; grid-template-columns: 6.5em 1fr; gap: 2px 8px; }
+  .pr-app dl.pr-facts dt { font-weight: 700; color: var(--muted); } .pr-app dl.pr-facts dd { margin: 0; }
+  .pr-app .pr-plwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+  .pr-app table.data.pr-pl td:first-child, .pr-app table.data.pr-pl th:first-child { position: sticky; left: 0; background: #fff; z-index: 2; text-align: left; }
+  .pr-app table.data.pr-pl th:first-child { background: #f0f3f7; z-index: 3; }
+  .pr-app table.data.pr-pl td.na { color: #b9c3cf; text-align: center; }
+  .pr-app table.data th small { display: block; font-weight: 400; color: var(--muted); font-size: .68rem; }
+  .pr-app .pill.cement { background: #fdecea; color: var(--bad); }
+  .pr-app .pr-cement { background: #fdecea; border-left: 4px solid var(--bad); padding: 8px 10px; font-size: .86rem; border-radius: 4px; }
   @media (max-width: 480px) { .pr-app table.data th, .pr-app table.data td { padding: 3px 4px; } .pr-app .pr-hide-sm { display: none; } }
 </style>
 </head>
@@ -122,11 +140,25 @@
   </div>
 </div>
 
+<div class="pr-fambar">
+  <div class="pr-faminner">
+    <div class="pr-famtitle">Working on…</div>
+    <div class="seg pr-famseg" id="pr-famSeg">
+      <button type="button" data-fam="all" class="on">All materials</button>
+      <button type="button" data-fam="plastic">🧪 Plastics</button>
+      <button type="button" data-fam="metal">🔩 Metals</button>
+    </div>
+    <div class="pr-chips" id="pr-subChips" hidden></div>
+    <div class="pr-famcount" id="pr-famCount"></div>
+  </div>
+</div>
+
 <nav class="pr-modes">
   <div class="seg" id="pr-modeSeg">
     <button type="button" data-mode="size" class="on">📏 By size</button>
     <button type="button" data-mode="couple">🔗 Couplings</button>
     <button type="button" data-mode="browse">📖 Browse</button>
+    <button type="button" data-mode="plastics" id="pr-plTab">🧪 Plastics</button>
   </div>
 </nav>
 
@@ -224,13 +256,33 @@
   </section>
 </main>
 
+<!-- ================= PLASTICS ================= -->
+<main class="pr-main" id="pr-plasticsMain" hidden>
+  <section class="card">
+    <h2>PVC and ABS pipework</h2>
+    <div class="row2">
+      <div class="field"><label>Sizing system</label>
+        <div class="seg" id="pr-plSys"><button type="button" data-sys="all">Both</button><button type="button" data-sys="metric">Metric</button><button type="button" data-sys="imperial">Imperial</button></div></div>
+      <div class="field"><label>Plastic</label>
+        <div class="seg" id="pr-plMat"><button type="button" data-make="all">All</button><button type="button" data-make="pvc">PVC</button><button type="button" data-make="abs">ABS</button></div></div>
+    </div>
+    <div class="pr-cement" id="pr-plCement"></div>
+    <div class="note">Walls are the standards’ <b>minimum</b> walls, ID = OD − 2 × wall (nominal). Imperial pipe is named by bore, metric by OD. ⚠ = a figure the sources disagree on or could not confirm. Tap a row to see it in By size.</div>
+  </section>
+  <div id="pr-plGroups"></div>
+  <section class="card" id="pr-plCompare">
+    <h2>Imperial vs metric PVC — why they don’t mix</h2>
+    <div id="pr-plCompareBody"></div>
+  </section>
+</main>
+
 <footer>
   <p><b>For guidance only.</b> Dimensions are from the standards and maker datasheets listed in pipe-data.js (see Sources below);
     rows marked ⚠ could not be cross-checked or were derived. Suitability ratings are general guidance, not approvals —
     always check the manufacturer’s data, the WRAS / Regulation 31 listing for the exact product, and the asset record,
     and measure the OD before ordering a coupling or adaptor.</p>
   <details><summary>Sources</summary><ul class="pr-list" id="pr-sources"></ul></details>
-  <p><a href="../flange/">← Flange ID</a> (sister app) · Pipe Reference v1</p>
+  <p><a href="../">← Flange ID</a> (sister app) · Pipe Reference v4</p>
 </footer>
 
 <script src="pipe-data.js"></script>
@@ -252,9 +304,19 @@ const PipeUI = (() => {
   const swatch = (m) => `<span class="swatch" style="background:${MAT[m].colour}"></span>`;
   const dnTag = (r) => r.dnBasis === 'matching' ? `≈DN${r.dn}` : r.dnBasis === 'similar' ? `~DN${r.dn}` : `DN${r.dn}`;
 
+  const fam0 = L.familyGet(localStorage);
   const st = { dn: store.get('dn', 100), sel: null, tab: store.get('tab', 'size'), plastic: store.get('showPlastic', true),
-    ukOnly: L.ukCommonGet(localStorage) };
-  function activeDns() { return L.dnList({ ukOnly: st.ukOnly }); }
+    ukOnly: L.ukCommonGet(localStorage), family: fam0.family, sub: fam0.sub,
+    plSys: store.get('plSys', 'all'), plMat: store.get('plMat', 'all') };
+  const FAMNAME = { plastic: 'Plastics', metal: 'Metals' };
+  const famOpts = () => ({ family: st.family, sub: st.sub });
+  const inFam = (r) => L.inFamily(r, st.family, st.sub);
+  const famLabel = () => st.family === 'all' ? 'All materials' : FAMNAME[st.family]
+    + (st.sub !== 'all' ? ' · ' + (D.families.find((f) => f.id === st.family).subs.find((x) => x.id === st.sub) || {}).label : '');
+  function famMsg(n) { return n ? `${famLabel()} filter on — ${n} row${n === 1 ? '' : 's'} hidden` : ''; }
+  // Plastics are always shown by size under the Plastics filter; Metals has none.
+  const plasticBasis = () => (st.family === 'plastic' ? true : st.family === 'metal' ? false : st.plastic);
+  function activeDns() { return L.dnList({ ukOnly: st.ukOnly, family: st.family, sub: st.sub }); }
   function hiddenMsg(n, extra) {
     if (!n) return '';
     return n + ' non-UK size' + (n === 1 ? '' : 's') + ' hidden' + (extra || '');
@@ -274,9 +336,12 @@ const PipeUI = (() => {
 
   /* ---------- tabs ---------- */
   function setTab(t) {
+    if (t === 'plastics' && st.family === 'metal') t = 'size';
     st.tab = t; store.set('tab', t);
     document.querySelectorAll('#pr-modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === t));
     $('sizeMain').hidden = t !== 'size'; $('coupleMain').hidden = t !== 'couple'; $('browseMain').hidden = t !== 'browse';
+    $('plasticsMain').hidden = t !== 'plastics';
+    if (t === 'plastics') renderPlastics();
     if (t === 'size') renderSize();
     if (t === 'couple') renderCouple();
     if (t === 'browse') renderBrowse();
@@ -287,7 +352,7 @@ const PipeUI = (() => {
     const sel = st.sel === r.key ? ' sel' : '';
     const flag = r.flag ? ` <span title="${esc(r.flag)}">⚠</span>` : '';
     const badge = (!st.ukOnly && !r.ukCommon) ? ' ' + pill('nonuk', 'non-UK') : '';
-    const sub = [r.nps, r.dnBasis !== 'nominal' ? dnTag(r) : null, r.wallBasis === 'derived' ? 'wall derived' : null].filter(Boolean).join(' · ');
+    const sub = [r.nps, r.nom, r.dnBasis !== 'nominal' ? dnTag(r) : null, r.wallBasis === 'derived' ? 'wall derived' : null].filter(Boolean).join(' · ');
     const cells = { mat: `<td class="l pr-hide-sm">${esc(MAT[r.material].short)}</td>`,
       dn: `<td>${esc(dnTag(r))}</td>` };
     return `<tr class="${sel}" data-key="${esc(r.key)}">${cols.includes('mat') ? cells.mat : ''}`
@@ -306,18 +371,21 @@ const PipeUI = (() => {
     const prevAt = stepAt >= 0 ? stepAt : stepList.filter((d) => d < st.dn).length;
     $('dnPrev').disabled = prevAt <= 0;
     $('dnNext').disabled = (stepAt >= 0 ? stepAt : prevAt - 1) >= stepList.length - 1;
-    const all = L.rowsForDN(st.dn, { basis: st.plastic ? 'all' : 'nominal' });
+    const basis = plasticBasis() ? 'all' : 'nominal';
+    const full = L.rowsForDN(st.dn, { basis });
+    const famRows = full.filter(inFam);
+    const all = famRows;
     const hidden = L.hiddenNonUk(all, st.ukOnly);
     const rows = st.ukOnly ? all.filter((r) => r.ukCommon) : all;
     setHiddenNote('sizeHidden', hidden);
-    if (st.tab === 'size') $('ukCount').textContent = hiddenMsg(hidden);
+    if (st.tab === 'size') { $('ukCount').textContent = hiddenMsg(hidden); setFamCount(full.length - famRows.length); }
     let html = '<thead><tr><th class="l">Standard · class</th><th>OD</th><th>Wall</th><th>ID nom.</th></tr></thead><tbody>';
     let last = null;
     for (const r of rows) {
       if (r.material !== last) { last = r.material; html += `<tr class="grp"><td colspan="4">${swatch(r.material)}${esc(MAT[r.material].name)}</td></tr>`; }
       html += rowHTML(r, []);
     }
-    if (!rows.length) html += '<tr><td colspan="4" class="l">No rows for this DN' + (hidden ? ' with the UK filter on.' : '.') + '</td></tr>';
+    if (!rows.length) html += '<tr><td colspan="4" class="l">No rows for this DN' + (hidden ? ' with the UK filter on' : '') + (st.family !== 'all' ? ' with the ' + famLabel() + ' filter on' : '') + '.</td></tr>';
     $('sizeTable').innerHTML = html + '</tbody>';
     if (!rows.find((r) => r.key === st.sel)) st.sel = (rows.find((r) => r.wall != null) || rows[0] || {}).key || null;
     markSel(); renderDetail();
@@ -343,6 +411,10 @@ const PipeUI = (() => {
     $('fitCard').hidden = false;
     $('fits').innerHTML = fitsHTML(r.od, r.material, true);
     $('matCard').hidden = false; $('matTitle').textContent = m.name; $('mat').innerHTML = materialHTML(m);
+    if (r.galv) {
+      const g = D.galvanised;
+      $('mat').innerHTML += `<details open><summary>${esc(g.name)}</summary>${materialHTML(g)}<div class="note">Source: ${src(g.sources)}</div></details>`;
+    }
   }
 
   function materialHTML(m) {
@@ -372,7 +444,9 @@ const PipeUI = (() => {
     return h + `<div class="s">Source: ${src(c.sources)}</div></details></div>`;
   }
   function fitsHTML(od, mat, compact) {
-    const hits = L.matchCouplings(od, mat);
+    const all0 = L.matchCouplings(od, mat);
+    const hits = all0.filter((h) => L.couplingInFamily(h.coupling, st.family, st.sub));
+    const famHid = all0.length - hits.length;
     if (!hits.length) return `<div class="empty">No product in this app lists ${od} mm. This is not a full catalogue — ask the makers.</div>`;
     const by = (t) => hits.filter((h) => h.coupling.type === t);
     let h = '';
@@ -381,6 +455,7 @@ const PipeUI = (() => {
       const list = by(t); if (!list.length) continue;
       h += `<h3>${title} (${list.length})</h3>` + list.map((x) => cplHTML(x, od)).join('');
     }
+    if (famHid) h += `<div class="note">${famHid} product(s) listing only ${st.family === 'metal' ? 'plastic' : 'metal'} pipe hidden by the ${famLabel()} filter.</div>`;
     return h;
   }
 
@@ -414,6 +489,7 @@ const PipeUI = (() => {
     const t = L.twoPipe(aOd, aMat, bOd, bMat);
     $('cplTitle').textContent = `Joining ${aOd} mm ${MAT[aMat].short} to ${bOd} mm ${MAT[bMat].short}`;
     let h = `<div class="twin">OD difference: <b>${t.diff} mm</b> (${t.lo} → ${t.hi} mm).</div>`;
+    t.sameRange = t.sameRange.filter((x) => L.couplingInFamily(x.coupling, st.family, st.sub));
     const okBoth = t.sameRange.filter((x) => x.ratingA[0] !== 'bad' && x.ratingB[0] !== 'bad');
     h += okBoth.length ? `<div class="pr-verdict good">✓ ${okBoth.length} wide-range coupling size(s) cover both ODs in one fitting.</div>`
       : t.stepped.length ? '<div class="pr-verdict caution">~ No single wide-range coupling spans both — a made-to-order stepped coupling can.</div>'
@@ -456,11 +532,96 @@ const PipeUI = (() => {
       <div class="s">${D.steppedTeekay.bands.map((b) => `${b[0]}–${b[1]} mm: +${b[2]}`).join(' · ')}</div><div class="s">Source: ${src([D.steppedTeekay.source])}</div></div>`;
   }
 
+
+  /* ---------- PLASTICS ---------- */
+  const fmt = (x) => (x == null ? '—' : String(L.round(x, 2)));
+  function plasticCell(r) {
+    if (!r) return '<td class="na">–</td>';
+    return `<td><b>${fmt(r.wall)}</b>${r.flag ? ` <span title="${esc(r.flag)}">⚠</span>` : ''}<small>ID ${fmt(r.id)}</small></td>`;
+  }
+  function groupHTML(g) {
+    const G = g.group, cols = g.series;
+    const flags = [];
+    let h = `<section class="card pr-plcard"><h2>${esc(G.title)}</h2>
+      <div><span class="pill">${G.system === 'metric' ? 'metric (OD-sized)' : 'imperial (bore-sized)'}</span><span class="pill cement">${esc(G.cement)}</span></div>
+      <dl class="pr-facts"><dt>Used for</dt><dd>${esc(G.uses)}</dd><dt>Joining</dt><dd>${esc(G.joining)}</dd><dt>Temperature</dt><dd>${esc(G.temp)}</dd><dt>WRAS</dt><dd>${esc(G.wras)}</dd></dl>`;
+    h += '<div class="pr-plwrap"><table class="data pr-pl"><thead><tr><th>Size</th><th>OD</th>'
+      + cols.map((s) => `<th title="${esc(s.label)}">${esc(s.cls)}<small>wall · ID</small></th>`).join('') + '</tr></thead><tbody>';
+    for (const sz of g.sizes) {
+      const first = cols.map((s) => sz.cells[s.id]).find(Boolean);
+      const label = sz.nps ? esc(sz.nps) : sz.nom ? esc(sz.nom) : fmt(sz.od);
+      const sub = sz.nps ? `DN${sz.dn}` : sz.nom ? 'bore name' : 'mm';
+      h += `<tr data-key="${esc(first.key)}"><td><b>${label}</b><small>${sub}</small></td><td><b>${fmt(sz.od)}</b></td>`
+        + cols.map((s) => plasticCell(sz.cells[s.id])).join('') + '</tr>';
+      cols.forEach((s) => { const r = sz.cells[s.id]; if (r && r.flag) flags.push(`${label} ${s.cls}: ${r.flag}`); });
+    }
+    h += '</tbody></table></div>';
+    if (flags.length) h += '<div class="flag">⚠ ' + [...new Set(flags)].map(esc).join('<br>⚠ ') + '</div>';
+    const notes = [...new Set(cols.flatMap((s) => s.notes || []))];
+    h += `<details><summary>Notes and sources</summary>${notes.map((t) => `<div class="note">${esc(t)}</div>`).join('')}<div class="note">Source: ${src(G.sources)}</div></details></section>`;
+    return h;
+  }
+  function renderPlastics() {
+    document.querySelectorAll('#pr-plSys button').forEach((b) => b.classList.toggle('on', b.dataset.sys === st.plSys));
+    document.querySelectorAll('#pr-plMat button').forEach((b) => b.classList.toggle('on', b.dataset.make === st.plMat));
+    $('plCement').textContent = '⚠ ' + D.plastics.cementWarning;
+    const groups = L.plasticGroups({ system: st.plSys, make: st.plMat, ukOnly: st.ukOnly });
+    const hiddenUk = L.plasticGroups({ system: st.plSys, make: st.plMat }).reduce((n, g) => n + g.series.length, 0)
+      - groups.reduce((n, g) => n + g.series.length, 0);
+    $('plGroups').innerHTML = groups.map(groupHTML).join('')
+      + (!groups.length ? '<section class="card"><div class="empty">No plastic tables for this choice with the UK filter on.</div></section>' : '')
+      + (hiddenUk ? `<div class="note" style="padding:0 12px">${hiddenUk} non-UK table(s) hidden by the UK filter (US Schedule 40 PVC).</div>` : '');
+    if (st.tab === 'plastics') $('ukCount').textContent = hiddenUk ? `${hiddenUk} non-UK table hidden` : '';
+    const cmp = L.inchVsMetric();
+    $('plCompareBody').innerHTML = '<div class="note">' + D.plastics.interconnect.map(esc).join('<br>') + '</div>'
+      + '<div class="scroll"><table class="data"><thead><tr><th class="l">Inch size</th><th>Inch OD</th><th>Nearest metric OD</th><th>Δ mm</th><th class="l">Mix?</th></tr></thead><tbody>'
+      + cmp.map((c) => `<tr><td class="l">${esc(c.nps)}</td><td>${fmt(c.od)}</td><td>${fmt(c.metric)}</td><td>${c.diff > 0 ? '+' : ''}${c.diff}</td>`
+        + `<td class="l">${c.interchangeable ? '✓ same OD' : 'adaptor needed'}</td></tr>`).join('') + '</tbody></table></div>'
+      + `<div class="note">“Nearest metric” is calculated by this app from BS 3505 and EN 1452 ODs — it is not a maker’s equivalence table. Source: ${src(D.plastics.interconnectSources)}</div>`;
+  }
+
+  /* ---------- material family filter ---------- */
+  function setFamCount(n) { $('famCount').textContent = famMsg(n); }
+  function renderFamBar() {
+    document.querySelectorAll('#pr-famSeg button').forEach((b) => b.classList.toggle('on', b.dataset.fam === st.family));
+    const f = D.families.find((x) => x.id === st.family), box = $('subChips');
+    box.hidden = !f.subs.length;
+    box.innerHTML = f.subs.length ? [{ id: 'all', label: 'All ' + f.label.toLowerCase() }].concat(f.subs)
+      .map((c) => `<button type="button" data-sub="${c.id}" class="${c.id === st.sub ? 'on' : ''}">${esc(c.label)}</button>`).join('') : '';
+    $('plTab').hidden = st.family === 'metal';
+    $('showPlastic').closest('.checks').hidden = st.family !== 'all';
+  }
+  function matOptions() {
+    const ids = L.materialsInFamily(st.family, st.sub);
+    return D.materials.filter((m) => ids.includes(m.id)).map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  }
+  function fillMaterialSelects() {
+    const opts = matOptions();
+    const keep = {};
+    ['aMat', 'bMat', 'fMat'].forEach((id) => { keep[id] = $(id).value; });
+    $('aMat').innerHTML = $('bMat').innerHTML = opts;
+    $('fMat').innerHTML = '<option value="">All ' + (st.family === 'all' ? 'materials' : famLabel().toLowerCase()) + '</option>' + opts;
+    const ok = (id) => [...$(id).options].some((o) => o.value === keep[id]);
+    ['aMat', 'bMat', 'fMat'].forEach((id) => { if (ok(id)) $(id).value = keep[id]; });
+    ['a', 'b'].forEach((w) => { $(w + 'Pick').innerHTML = sizeOptions($(w + 'Mat').value); });
+  }
+  function applyFamily(family, sub) {
+    const r = L.familySet(localStorage, family, sub);
+    st.family = r.family; st.sub = r.sub; st.sel = null;
+    const list = activeDns();
+    if (list.length && !list.includes(st.dn)) st.dn = list.reduce((b, d) => (Math.abs(d - st.dn) < Math.abs(b - st.dn) ? d : b), list[0]);
+    renderFamBar(); fillDnSelect(); fillMaterialSelects();
+    if (st.family === 'metal' && st.tab === 'plastics') st.tab = 'size';
+    renderSize(); renderCouple(); renderBrowse(); renderSuitGrid(); setTab(st.tab);
+  }
+
   /* ---------- BROWSE ---------- */
   let level = 'good';
   function renderBrowse() {
-    const f = { q: $('q').value, material: $('fMat').value || null, service: $('fSvc').value || null, level };
+    const f = { q: $('q').value, material: $('fMat').value || null, service: $('fSvc').value || null, level, family: st.family, sub: st.sub };
     const all = L.filterRows(L.ROWS, f);
+    const famHid = L.filterRows(L.ROWS, { ...f, family: 'all', sub: 'all' }).length - all.length;
+    if (st.tab === 'browse') setFamCount(famHid);
     const hidden = L.hiddenNonUk(all, st.ukOnly);
     const rows = st.ukOnly ? all.filter((r) => r.ukCommon) : all, MAX = 400;
     const hideNote = hiddenMsg(hidden);
@@ -473,7 +634,7 @@ const PipeUI = (() => {
   function renderSuitGrid() {
     const sym = { good: '✓', caution: '~', bad: '✗' };
     $('suitGrid').innerHTML = '<thead><tr><th class="l">Material</th>' + D.services.map((s) => `<th>${esc(s.label)}</th>`).join('') + '</tr></thead><tbody>'
-      + D.materials.map((m) => `<tr><td class="l">${swatch(m.id)}${esc(m.short)}</td>` + D.services.map((s) => {
+      + D.materials.filter((m) => L.inFamily(m, st.family, st.sub === 'galv' ? 'steel' : st.sub)).map((m) => `<tr><td class="l">${swatch(m.id)}${esc(m.short)}</td>` + D.services.map((s) => {
         const v = m.suit[s.key]; return v ? `<td title="${esc(v[1])}" style="text-align:center">${pill(v[0], sym[v[0]])}</td>` : '<td></td>';
       }).join('') + '</tr>').join('') + '</tbody>';
   }
@@ -483,9 +644,9 @@ const PipeUI = (() => {
     fillDnSelect();
     $('showPlastic').checked = st.plastic;
     $('ukCommon').checked = st.ukOnly;
-    const matOpts = D.materials.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+    const matOpts = matOptions();
     $('aMat').innerHTML = $('bMat').innerHTML = matOpts;
-    $('fMat').innerHTML = '<option value="">All materials</option>' + matOpts;
+    $('fMat').innerHTML = '<option value="">All ' + (st.family === 'all' ? 'materials' : famLabel().toLowerCase()) + '</option>' + matOpts;
     $('fSvc').innerHTML = '<option value="">Any service</option>' + D.services.map((s) => `<option value="${s.key}">${esc(s.label)}</option>`).join('');
     $('sources').innerHTML = Object.values(D.sources).map((s) => `<li>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}</li>`).join('');
 
@@ -506,7 +667,18 @@ const PipeUI = (() => {
       fillDnSelect();
       const fillPick = (w) => { $(w + 'Pick').innerHTML = sizeOptions($(w + 'Mat').value); };
       fillPick('a'); fillPick('b');
-      renderSize(); renderCouple(); renderBrowse();
+      renderSize(); renderCouple(); renderBrowse(); if (st.tab === 'plastics') renderPlastics();
+    });
+    document.querySelectorAll('#pr-famSeg button').forEach((b) => b.addEventListener('click', () => applyFamily(b.dataset.fam, 'all')));
+    $('subChips').addEventListener('click', (e) => { const b = e.target.closest('button[data-sub]'); if (b) applyFamily(st.family, b.dataset.sub); });
+    document.querySelectorAll('#pr-plSys button').forEach((b) => b.addEventListener('click', () => { st.plSys = b.dataset.sys; store.set('plSys', st.plSys); renderPlastics(); }));
+    document.querySelectorAll('#pr-plMat button').forEach((b) => b.addEventListener('click', () => { st.plMat = b.dataset.make; store.set('plMat', st.plMat); renderPlastics(); }));
+    $('plGroups').addEventListener('click', (e) => {
+      const tr = e.target.closest('tr[data-key]'); if (!tr) return;
+      const r = L.ROWS.find((x) => x.key === tr.dataset.key); if (!r || r.dn == null) return;
+      if (!inFam(r)) applyFamily('all', 'all');
+      st.dn = r.dn; st.sel = r.key; st.plastic = true; store.set('showPlastic', true); $('showPlastic').checked = true;
+      setTab('size'); renderSize(); st.sel = r.key; markSel(); renderDetail(); window.scrollTo(0, 0);
     });
     $('showLining').addEventListener('change', renderDetail);
     $('sizeTable').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-key]'); if (!tr) return; st.sel = tr.dataset.key; markSel(); renderDetail();
@@ -517,8 +689,9 @@ const PipeUI = (() => {
       setTab('size'); renderSize(); st.sel = r.key; markSel(); renderDetail(); window.scrollTo(0, 0); });
 
     const c = store.get('couple', {});
-    if (c.aMat) $('aMat').value = c.aMat; else $('aMat').value = 'di';
-    if (c.bMat) $('bMat').value = c.bMat; else $('bMat').value = 'pe';
+    const hasOpt = (id, v) => [...$(id).options].some((o) => o.value === v);
+    $('aMat').value = c.aMat && hasOpt('aMat', c.aMat) ? c.aMat : (hasOpt('aMat', 'di') ? 'di' : $('aMat').options[0].value);
+    $('bMat').value = c.bMat && hasOpt('bMat', c.bMat) ? c.bMat : (hasOpt('bMat', 'pe') ? 'pe' : $('bMat').options[0].value);
     $('aOd').value = c.aOd || ''; $('bOd').value = c.bOd || ''; $('twoOn').checked = !!c.two;
     const fillPick = (w) => { $(w + 'Pick').innerHTML = sizeOptions($(w + 'Mat').value); };
     fillPick('a'); fillPick('b');
@@ -533,6 +706,7 @@ const PipeUI = (() => {
       level = b.dataset.level; document.querySelectorAll('#pr-fLevel button').forEach((x) => x.classList.toggle('on', x === b)); renderBrowse(); }));
 
     renderSize(); renderCouple(); renderCatalogue(); renderSuitGrid(); setTab(st.tab);
+    renderFamBar();
 
     // Offline support when hosted (not when opened as a local file).
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
