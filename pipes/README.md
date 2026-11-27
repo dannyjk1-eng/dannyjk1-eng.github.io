@@ -22,6 +22,17 @@ It is plain HTML, JS and SVG with no build step, and it works offline once opene
 - **Browse**: search all rows (e.g. `SDR11`, `C40`, `114.3`), filter by material and by service (e.g. drinking water, good
   only), plus a materials × services grid.
 
+## DN versus outside diameter (v5)
+Metric PVC, ABS and PE are designated by **nominal outside diameter** (dn / d), not by steel DN.
+**d25 = 25 mm OD**, which is the usual match for steel/valve **DN20**. Steel **DN25** is 33.7 mm OD (1"); the usual metric plastic is **d32 (32 mm OD)**.
+
+This is not an error in the tables — the OD figures were already correct (EN 1452 / ISO 161-1 / Durapipe: 25 mm pipe has a 25.0 mm minimum mean OD). The By-size picker used the steel DN ladder, so choosing “DN 25” listed the 32 mm plastic (the usual steel equivalent) and hid 25 mm OD under “DN 20”. That was confusing.
+
+- Under **Plastics**, the size list is now by OD: `d25 (25 mm OD) ≈ DN20`. Searching **25**, **d25** or **25 mm** finds the 25 mm OD pipe.
+- Under **All**, the picker is still by steel DN, but plastic rows are labelled `d32 (32 mm OD) ≈ DN25`, and a note explains the difference with a jump to the 25 mm OD size.
+- Browse search: `d25` matches 25 mm OD; `dn25` matches the steel-DN grouping; a bare `25` still matches either.
+- Sources: ISO 161-1:2018, ISO 1452-1:2009 cl. 3.1.2, ISO 6708:1995, Durapipe PVC-U specification guide, FIP/GF valve tables (d 25 = DN 20, d 32 = DN 25).
+
 ## Material family filter and Plastics tab (v4)
 - **Working on… All / Plastics / Metals** (second bar, under *Common in UK*), remembered as `pipeRef.family` and `pipeRef.familySub`.
   It combines with the UK toggle and applies to **By size** (rows and the DN list), **Couplings** (material lists, and products that list no
@@ -63,7 +74,7 @@ All other retailer figures agree.
 | `pipe-logic.js` | Flattening rows, DN logic, filters, coupling matching and two-pipe logic. Global `PipeLogic`. |
 | `pipe-drawing.js` | Cross-section and two-pipe SVGs. Global `PipeDrawing`. |
 | `index.html` | Screen code. CSS scoped to `.pr-app`, ids `pr-*`, one global `PipeUI`, storage keys `pipeRef.*`. |
-| `sw.js` / `manifest.json` / `icons/` | PWA. The cache is `pipe-ref-v4`, and it only touches `pipe-ref-*` caches and its own files. |
+| `sw.js` / `manifest.json` / `icons/` | PWA. The cache is `pipe-ref-v5`, and it only touches `pipe-ref-*` caches and its own files. |
 | `tests.js` | `node tests.js`: data sanity, spot checks, coupling and two-pipe logic, namespacing. |
 | `build-standalone.js` | `node build-standalone.js` writes `pipe-reference-standalone.html`. |
 

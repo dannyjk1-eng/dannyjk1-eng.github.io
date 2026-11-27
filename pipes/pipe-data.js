@@ -132,6 +132,14 @@ const PIPE_DATA = (() => {
       url: 'https://www.hccl.ie/uploads/1/4/7/3/1473854/2012_pvc_catalog__n_1_.pdf' },
     plasticpipeshop: { title: 'The Plastic Pipe Shop — PVC pipe measurements OD, ID, wall (retailer table; used as a SECONDARY cross-check only)',
       url: 'https://www.plasticpipeshop.co.uk/PVC-Pipe-Measurements-OD-ID-Wall_ep_53-1.html' },
+    iso161: { title: 'ISO 161-1:2018 Thermoplastics pipes — Nominal outside diameters and nominal pressures — Part 1: Metric series (dn equals the minimum mean OD)',
+      url: 'https://cdn.standards.iteh.ai/samples/65253/e6de084cc2624dca8945373461aff650/ISO-161-1-2018.pdf' },
+    iso6708: { title: 'ISO 6708:1995 / EN ISO 6708 Pipework components — Definition and selection of DN (the number after DN is not a measurable value)',
+      url: 'https://cdn.standards.iteh.ai/samples/21274/215f10da5d6a44ebb74e667e68ac1cbe/ISO-6708-1995.pdf' },
+    iso1452def: { title: 'ISO 1452-1:2009 clause 3.1.2 — DN, DN/OD and nominal diameter dn (equals the minimum mean outside diameter)',
+      url: 'https://preview.sist.si/sist-preview/50361/ac6cd86714cc433a8f5ef39a4c1ea004/ISO-1452-1-2009.pdf' },
+    gfValveDn: { title: 'FIP / GF Dual Block PVC-U valve tables: d 25 = DN 20, d 32 = DN 25 (KWERK datasheet)',
+      url: 'https://en.kwerk.de/datenblaetter/pvc_u-manuael_valves_001.pdf' },
     bafsa: { title: 'BAFSA information file — steel tubes and fittings for sprinklers (galvanised: not above 60 °C, not with copper alloys)',
       url: 'https://www.bafsa.org.uk/assets/Downloads/BIF8e_SteelTubes.pdf' },
     zvm: { title: 'Pancera TUBI ZVM — galvanised screwed tube to EN 10255, hot-dip galvanised to EN 10240 A.1 (drinking-water use)',
@@ -1053,6 +1061,13 @@ const PIPE_DATA = (() => {
   const CEMENT = 'PVC-U and ABS use DIFFERENT solvent cements — they are not interchangeable. Durapipe: its ABS cement (with Eco-cleaner) must be used on ABS, its PVC-U one-step cement (or HCR-36 for strong chemicals) on PVC-U, and brushes must not be shared between cements.';
   const plastics = {
     cementWarning: CEMENT,
+    dnVsOd: [
+      'Metric thermoplastic pipe (PVC-U, ABS, PE) is designated by its nominal outside diameter dn (ISO 161-1 and ISO 1452-1). A “25 mm” or “d25” pipe has a 25.0 mm OD — that is not steel DN25.',
+      'DN (ISO 6708) is a dimensionless size used for steel, flanges and valves. “The number following the letters DN does not represent a measurable value.” Steel DN25 is 33.7 mm OD (1").',
+      'Valve and fitting makers therefore list both numbers: d25 (25 mm OD pipe) = DN20; d32 (32 mm OD pipe) = DN25. Durapipe: “the imperial system refers to the nominal bore size; the metric system relates to the outside diameter.”',
+      'EN 1401 and EN 1329 drainage is designated DN/OD, so DN110 means 110 mm outside diameter (not steel DN100).'
+    ],
+    dnVsOdSources: ['iso161', 'iso6708', 'iso1452def', 'durapipePvc', 'gfValveDn'],
     interconnect: ['Imperial (inch) pipe is named by nominal BORE and metric pipe by OD; the ODs are slightly different, so they do not mix without inch / metric adaptors or flanges.',
       'Only 2½" / 75 mm and 5" / 140 mm are dimensionally interchangeable (Durapipe ABS; GF PVC-U).',
       'Do not interchange metric and imperial flanges and backing rings (Durapipe).'],
