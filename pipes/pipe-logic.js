@@ -107,6 +107,126 @@ const PipeLogic = (() => {
     return rows.filter((r) => !inFamily(r, family, sub)).length;
   }
 
+
+  /* ---------- plastic size designation (ISO 161-1 / ISO 1452) ----------
+   * Metric thermoplastic pipe is designated by nominal outside diameter dn
+   * (a “25 mm” or “d25” pipe has a 25 mm OD). That is not the same number as
+   * steel/valve DN (ISO 6708): d25 ↔ DN20, d32 ↔ DN25. */
+  const ISO161_DN = [16, 20, 25, 32, 40, 50, 63, 75, 90, 110, 125, 140, 160, 180, 200, 225, 250, 280, 315, 355, 400, 450, 500, 560, 630, 710, 800, 900, 1000, 1200];
+
+  /** Parse a typed size: 'd25', 'dn25', 'od 32', '25mm', '25'. */
+  function parseSizeQuery(q) {
+    const raw = String(q || '').trim();
+    const s = raw.toLowerCase().replace(/[ø∅]/g, 'd').replace(/,/g, '.');
+    if (!s) return { raw, num: null, kind: null };
+    const m = s.match(/^(dn|od|dia|d)?\s*([0-9]+(?:\.[0-9]+)?)\s*(mm)?$/i);
+    if (!m) return { raw, num: null, kind: null };
+    const num = +m[2];
+    const p = (m[1] || '').toLowerCase();
+    const kind = p === 'dn' ? 'dn' : (p === 'd' || p === 'od' || p === 'dia' ? 'd' : 'bare');
+    return { raw, num, kind };
+  }
+
+  /** Metric OD-designated plastic (not imperial inch, not GRP with a true DN). */
+  function isOdPlastic(r) {
+    return r.family === 'plastic' && !r.nps && r.dnBasis !== 'nominal';
+  }
+
+  /** Human-readable size for a row. Metric plastic: "d25 (25 mm OD) ≈ DN20". */
+  function sizeName(r) {
+    const od = r.od;
+    const odTxt = Number.isInteger(od) ? String(od) : String(od);
+    const steel = r.dn != null ? ((r.dnBasis === 'matching' ? '≈' : r.dnBasis === 'similar' ? '≈' : '') + 'DN' + r.dn) : '';
+    if (isOdPlastic(r)) {
+      if (r.nom && Math.abs(parseFloat(r.nom) - od) > 0.15) {
+        const long = `${r.nom} (OD ${odTxt} mm)` + (steel ? ` ${steel}` : '');
+        return { primary: r.nom, secondary: `OD ${odTxt} mm` + (steel ? ` · ${steel}` : ''), long, d: od, steelDn: r.dn };
+      }
+      const long = `d${odTxt} (${odTxt} mm OD)` + (steel ? ` ${steel}` : '');
+      return { primary: `d${odTxt}`, secondary: `${odTxt} mm OD` + (steel ? ` · ${steel}` : ''), long, d: od, steelDn: r.dn };
+    }
+    if (r.nps) {
+      const long = `${r.nps} (${odTxt} mm OD)` + (r.dn != null ? ` · DN${r.dn}` : '');
+      return { primary: r.nps, secondary: r.dn != null ? `DN${r.dn}` : '', long, d: od, steelDn: r.dn };
+    }
+    const long = r.dn != null ? `DN${r.dn} (${odTxt} mm OD)` : `${odTxt} mm OD`;
+    return { primary: r.dn != null ? `DN${r.dn}` : odTxt + ' mm', secondary: '', long, d: od, steelDn: r.dn };
+  }
+
+  function sizeKeyForRow(r) {
+    if (r.nps) return 'nps:' + r.nps;
+    if (r.family === 'plastic' && r.dnBasis === 'nominal' && r.dn != null) return 'dn:' + r.dn;
+    if (r.nom && Math.abs(parseFloat(r.nom) - r.od) > 0.15) return 'nom:' + parseFloat(r.nom);
+    if (isOdPlastic(r)) return 'd:' + r.od;
+    return r.dn != null ? 'dn:' + r.dn : 'd:' + r.od;
+  }
+
+  /** Picker list when Working on… Plastics. Groups: metric (by OD) and imperial (by bore). */
+  function plasticSizeList(opts = {}) {
+    const src = ROWS.filter((r) => r.family === 'plastic' && (!opts.ukOnly || r.ukCommon) && inFamily(r, opts.family || 'plastic', opts.sub));
+    const metric = new Map(), imperial = new Map(), grp = new Map();
+    for (const r of src) {
+      if (r.nps) {
+        const k = 'nps:' + r.nps;
+        if (!imperial.has(k)) imperial.set(k, { value: k, kind: 'nps', nps: r.nps, od: r.od, dn: r.dn, sort: r.od,
+          label: `${r.nps} (${r.od} mm OD) · DN${r.dn}` });
+        continue;
+      }
+      if (r.dnBasis === 'nominal' && r.dn != null) {
+        const k = 'dn:' + r.dn;
+        if (!grp.has(k)) grp.set(k, { value: k, kind: 'dn', num: r.dn, od: r.od, dn: r.dn, sort: r.od,
+          label: `DN${r.dn} (${r.od} mm OD)` });
+        continue;
+      }
+      if (r.nom && Math.abs(parseFloat(r.nom) - r.od) > 0.15) {
+        const n = parseFloat(r.nom);
+        const k = 'nom:' + n;
+        if (!metric.has(k)) metric.set(k, { value: k, kind: 'nom', num: n, od: r.od, dn: r.dn, sort: r.od,
+          label: `${r.nom} (OD ${r.od} mm)` + (r.dn != null ? ` ≈ DN${r.dn}` : '') });
+        continue;
+      }
+      const n = r.od;
+      const k = 'd:' + n;
+      if (!metric.has(k)) {
+        const dlabel = Number.isInteger(n) ? String(n) : String(n);
+        metric.set(k, { value: k, kind: 'd', num: n, od: n, dn: r.dn, sort: n,
+          label: `d${dlabel} (${dlabel} mm OD)` + (r.dn != null ? ` ≈ DN${r.dn}` : '') });
+      }
+    }
+    const met = [...metric.values()].sort((a, b) => a.sort - b.sort);
+    const imp = [...imperial.values()].sort((a, b) => a.sort - b.sort);
+    const g = [...grp.values()].sort((a, b) => a.sort - b.sort);
+    return { metric: met, imperial: imp, grp: g, all: met.concat(imp, g) };
+  }
+
+  /** Rows whose plastic designation matches a picker value ('d:25', 'nps:1"', 'nom:32', 'dn:200'). */
+  function rowsForPlasticSize(value, opts = {}) {
+    const src = ROWS.filter((r) => r.family === 'plastic' && inFamily(r, opts.family || 'plastic', opts.sub));
+    if (value == null || value === '') return [];
+    const v = String(value);
+    if (v.startsWith('nps:')) {
+      const nps = v.slice(4);
+      return src.filter((r) => r.nps === nps).sort(sortRows);
+    }
+    if (v.startsWith('nom:')) {
+      const n = +v.slice(4);
+      return src.filter((r) => r.nom && parseFloat(r.nom) === n).sort(sortRows);
+    }
+    if (v.startsWith('dn:')) {
+      const n = +v.slice(3);
+      return src.filter((r) => r.dn === n && r.dnBasis === 'nominal').sort(sortRows);
+    }
+    const n = v.startsWith('d:') ? +v.slice(2) : +v;
+    if (Number.isNaN(n)) return [];
+    return src.filter((r) => {
+      if (r.nps) return false;
+      if (r.dnBasis === 'nominal') return false;
+      if (Math.abs(r.od - n) <= 0.05) return true;
+      if (r.nom && parseFloat(r.nom) === n) return true;
+      return false;
+    }).sort(sortRows);
+  }
+
   /** All DNs that have at least one row (any basis), 15–1200. opts.ukOnly hides DNs with only non-UK rows. */
   function dnList(opts = {}) {
     const src = ROWS.filter((r) => (!opts.ukOnly || r.ukCommon) && inFamily(r, opts.family, opts.sub));
@@ -128,7 +248,6 @@ const PipeLogic = (() => {
   /** Filter rows. f = { material, service, level ('good'|'possible'), q, ukOnly, family, sub } */
   function filterRows(rows, f = {}) {
     const q = (f.q || '').trim().toLowerCase();
-    const num = q && !isNaN(+q) ? +q : null;
     return rows.filter((r) => {
       if (f.ukOnly && !r.ukCommon) return false;
       if (!inFamily(r, f.family, f.sub)) return false;
@@ -139,12 +258,25 @@ const PipeLogic = (() => {
         if (s[0] === 'bad') return false;
         if ((f.level || 'good') === 'good' && s[0] !== 'good') return false;
       }
-      if (num != null) {
-        const near = Math.abs(r.od - num) <= Math.max(1, num * 0.02);
-        if (!(near || r.dn === num)) return false;
-      } else if (q) {
-        const hay = [r.standard, r.cls, r.label, MAT[r.material].name, r.nps || ''].join(' ').toLowerCase();
-        if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
+      if (q) {
+        const parsed = parseSizeQuery(q);
+        if (parsed.num != null) {
+          const n = parsed.num;
+          if (parsed.kind === 'd') {
+            const near = Math.abs(r.od - n) <= 0.15;
+            const nom = r.nom && parseFloat(r.nom) === n;
+            if (!(near || nom)) return false;
+          } else if (parsed.kind === 'dn') {
+            if (r.dn !== n) return false;
+          } else {
+            const near = Math.abs(r.od - n) <= Math.max(1, n * 0.02);
+            const nom = r.nom && parseFloat(r.nom) === n;
+            if (!(near || r.dn === n || nom)) return false;
+          }
+        } else {
+          const hay = [r.standard, r.cls, r.label, MAT[r.material].name, r.nps || '', r.nom || ''].join(' ').toLowerCase();
+          if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
+        }
       }
       return true;
     }).sort(sortRows);
@@ -267,7 +399,8 @@ const PipeLogic = (() => {
 
   return { data: D, MAT, SERIES, ROWS, similarDN, liningFor, dnList, rowsForDN, suit, filterRows,
     matchCouplings, twoPipe, coverage, round, UK_COMMON_DEFAULT, ukCommonGet, ukCommonSet, hiddenNonUk,
-    FAMILY_DEFAULT, inFamily, materialsInFamily, couplingInFamily, familyGet, familySet, hiddenByFamily, plasticGroups, inchVsMetric };
+    FAMILY_DEFAULT, inFamily, materialsInFamily, couplingInFamily, familyGet, familySet, hiddenByFamily, plasticGroups, inchVsMetric,
+    ISO161_DN, parseSizeQuery, isOdPlastic, sizeName, sizeKeyForRow, plasticSizeList, rowsForPlasticSize };
 })();
 
 if (typeof module !== 'undefined') module.exports = { PipeLogic };

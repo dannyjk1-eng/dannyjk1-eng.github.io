@@ -123,6 +123,9 @@
   .pr-app table.data th small { display: block; font-weight: 400; color: var(--muted); font-size: .68rem; }
   .pr-app .pill.cement { background: #fdecea; color: var(--bad); }
   .pr-app .pr-cement { background: #fdecea; border-left: 4px solid var(--bad); padding: 8px 10px; font-size: .86rem; border-radius: 4px; }
+  .pr-app .note.pr-dnod { background: #fff8e6; border-left: 4px solid #c48a00; padding: 8px 10px; color: #1d2733; }
+  .pr-app .note.pr-dnod b { font-weight: 650; }
+  .pr-app button.pr-jump { appearance: none; background: none; border: 0; padding: 0; color: var(--brand); font: inherit; font-weight: 650; cursor: pointer; text-decoration: underline; }
   @media (max-width: 480px) { .pr-app table.data th, .pr-app table.data td { padding: 3px 4px; } .pr-app .pr-hide-sm { display: none; } }
 </style>
 </head>
@@ -165,19 +168,19 @@
 <!-- ================= BY SIZE ================= -->
 <main class="pr-main pr-split" id="pr-sizeMain">
   <section class="card">
-    <h2>Pick a nominal size</h2>
+    <h2 id="pr-sizeHead">Pick a nominal size</h2>
     <div class="field">
       <div class="stepper">
-        <button type="button" id="pr-dnPrev" aria-label="Smaller DN">‹</button>
+        <button type="button" id="pr-dnPrev" aria-label="Smaller size">‹</button>
         <select id="pr-dn" aria-label="Nominal size DN"></select>
-        <button type="button" id="pr-dnNext" aria-label="Larger DN">›</button>
+        <button type="button" id="pr-dnNext" aria-label="Larger size">›</button>
       </div>
     </div>
     <div class="checks" style="margin-bottom:8px">
       <label><input type="checkbox" id="pr-showPlastic" checked> Include plastics sized by OD</label>
     </div>
-    <div class="note">ID = OD − 2 × wall, <b>nominal</b> (no tolerances, no lining). “min” = the standard gives a minimum wall.
-      Plastics are sized by OD: <b>≈DN</b> = equivalent bore (PE), <b>~DN</b> = OD close to steel of that DN. Tap a row for the drawing, materials and couplings.</div>
+    <div class="note pr-dnod" id="pr-dnOdNote"></div>
+    <div class="note" id="pr-sizeHelp">ID = OD − 2 × wall, <b>nominal</b> (no tolerances, no lining). “min” = the standard gives a minimum wall. Tap a row for the drawing, materials and couplings.</div>
     <div class="note" id="pr-sizeHidden" hidden></div>
     <div class="pr-tablewrap scroll" style="margin-top:8px">
       <table class="data" id="pr-sizeTable"></table>
@@ -267,6 +270,7 @@
         <div class="seg" id="pr-plMat"><button type="button" data-make="all">All</button><button type="button" data-make="pvc">PVC</button><button type="button" data-make="abs">ABS</button></div></div>
     </div>
     <div class="pr-cement" id="pr-plCement"></div>
+    <div class="note pr-dnod" id="pr-plDnNote"></div>
     <div class="note">Walls are the standards’ <b>minimum</b> walls, ID = OD − 2 × wall (nominal). Imperial pipe is named by bore, metric by OD. ⚠ = a figure the sources disagree on or could not confirm. Tap a row to see it in By size.</div>
   </section>
   <div id="pr-plGroups"></div>
@@ -282,7 +286,7 @@
     always check the manufacturer’s data, the WRAS / Regulation 31 listing for the exact product, and the asset record,
     and measure the OD before ordering a coupling or adaptor.</p>
   <details><summary>Sources</summary><ul class="pr-list" id="pr-sources"></ul></details>
-  <p><a href="../">← Flange ID</a> (sister app) · Pipe Reference v4</p>
+  <p><a href="../">← Flange ID</a> (sister app) · Pipe Reference v5</p>
 </footer>
 
 <script>
@@ -420,6 +424,14 @@ const PIPE_DATA = (() => {
       url: 'https://www.hccl.ie/uploads/1/4/7/3/1473854/2012_pvc_catalog__n_1_.pdf' },
     plasticpipeshop: { title: 'The Plastic Pipe Shop — PVC pipe measurements OD, ID, wall (retailer table; used as a SECONDARY cross-check only)',
       url: 'https://www.plasticpipeshop.co.uk/PVC-Pipe-Measurements-OD-ID-Wall_ep_53-1.html' },
+    iso161: { title: 'ISO 161-1:2018 Thermoplastics pipes — Nominal outside diameters and nominal pressures — Part 1: Metric series (dn equals the minimum mean OD)',
+      url: 'https://cdn.standards.iteh.ai/samples/65253/e6de084cc2624dca8945373461aff650/ISO-161-1-2018.pdf' },
+    iso6708: { title: 'ISO 6708:1995 / EN ISO 6708 Pipework components — Definition and selection of DN (the number after DN is not a measurable value)',
+      url: 'https://cdn.standards.iteh.ai/samples/21274/215f10da5d6a44ebb74e667e68ac1cbe/ISO-6708-1995.pdf' },
+    iso1452def: { title: 'ISO 1452-1:2009 clause 3.1.2 — DN, DN/OD and nominal diameter dn (equals the minimum mean outside diameter)',
+      url: 'https://preview.sist.si/sist-preview/50361/ac6cd86714cc433a8f5ef39a4c1ea004/ISO-1452-1-2009.pdf' },
+    gfValveDn: { title: 'FIP / GF Dual Block PVC-U valve tables: d 25 = DN 20, d 32 = DN 25 (KWERK datasheet)',
+      url: 'https://en.kwerk.de/datenblaetter/pvc_u-manuael_valves_001.pdf' },
     bafsa: { title: 'BAFSA information file — steel tubes and fittings for sprinklers (galvanised: not above 60 °C, not with copper alloys)',
       url: 'https://www.bafsa.org.uk/assets/Downloads/BIF8e_SteelTubes.pdf' },
     zvm: { title: 'Pancera TUBI ZVM — galvanised screwed tube to EN 10255, hot-dip galvanised to EN 10240 A.1 (drinking-water use)',
@@ -1341,6 +1353,13 @@ const PIPE_DATA = (() => {
   const CEMENT = 'PVC-U and ABS use DIFFERENT solvent cements — they are not interchangeable. Durapipe: its ABS cement (with Eco-cleaner) must be used on ABS, its PVC-U one-step cement (or HCR-36 for strong chemicals) on PVC-U, and brushes must not be shared between cements.';
   const plastics = {
     cementWarning: CEMENT,
+    dnVsOd: [
+      'Metric thermoplastic pipe (PVC-U, ABS, PE) is designated by its nominal outside diameter dn (ISO 161-1 and ISO 1452-1). A “25 mm” or “d25” pipe has a 25.0 mm OD — that is not steel DN25.',
+      'DN (ISO 6708) is a dimensionless size used for steel, flanges and valves. “The number following the letters DN does not represent a measurable value.” Steel DN25 is 33.7 mm OD (1").',
+      'Valve and fitting makers therefore list both numbers: d25 (25 mm OD pipe) = DN20; d32 (32 mm OD pipe) = DN25. Durapipe: “the imperial system refers to the nominal bore size; the metric system relates to the outside diameter.”',
+      'EN 1401 and EN 1329 drainage is designated DN/OD, so DN110 means 110 mm outside diameter (not steel DN100).'
+    ],
+    dnVsOdSources: ['iso161', 'iso6708', 'iso1452def', 'durapipePvc', 'gfValveDn'],
     interconnect: ['Imperial (inch) pipe is named by nominal BORE and metric pipe by OD; the ODs are slightly different, so they do not mix without inch / metric adaptors or flanges.',
       'Only 2½" / 75 mm and 5" / 140 mm are dimensionally interchangeable (Durapipe ABS; GF PVC-U).',
       'Do not interchange metric and imperial flanges and backing rings (Durapipe).'],
@@ -1519,6 +1538,126 @@ const PipeLogic = (() => {
     return rows.filter((r) => !inFamily(r, family, sub)).length;
   }
 
+
+  /* ---------- plastic size designation (ISO 161-1 / ISO 1452) ----------
+   * Metric thermoplastic pipe is designated by nominal outside diameter dn
+   * (a “25 mm” or “d25” pipe has a 25 mm OD). That is not the same number as
+   * steel/valve DN (ISO 6708): d25 ↔ DN20, d32 ↔ DN25. */
+  const ISO161_DN = [16, 20, 25, 32, 40, 50, 63, 75, 90, 110, 125, 140, 160, 180, 200, 225, 250, 280, 315, 355, 400, 450, 500, 560, 630, 710, 800, 900, 1000, 1200];
+
+  /** Parse a typed size: 'd25', 'dn25', 'od 32', '25mm', '25'. */
+  function parseSizeQuery(q) {
+    const raw = String(q || '').trim();
+    const s = raw.toLowerCase().replace(/[ø∅]/g, 'd').replace(/,/g, '.');
+    if (!s) return { raw, num: null, kind: null };
+    const m = s.match(/^(dn|od|dia|d)?\s*([0-9]+(?:\.[0-9]+)?)\s*(mm)?$/i);
+    if (!m) return { raw, num: null, kind: null };
+    const num = +m[2];
+    const p = (m[1] || '').toLowerCase();
+    const kind = p === 'dn' ? 'dn' : (p === 'd' || p === 'od' || p === 'dia' ? 'd' : 'bare');
+    return { raw, num, kind };
+  }
+
+  /** Metric OD-designated plastic (not imperial inch, not GRP with a true DN). */
+  function isOdPlastic(r) {
+    return r.family === 'plastic' && !r.nps && r.dnBasis !== 'nominal';
+  }
+
+  /** Human-readable size for a row. Metric plastic: "d25 (25 mm OD) ≈ DN20". */
+  function sizeName(r) {
+    const od = r.od;
+    const odTxt = Number.isInteger(od) ? String(od) : String(od);
+    const steel = r.dn != null ? ((r.dnBasis === 'matching' ? '≈' : r.dnBasis === 'similar' ? '≈' : '') + 'DN' + r.dn) : '';
+    if (isOdPlastic(r)) {
+      if (r.nom && Math.abs(parseFloat(r.nom) - od) > 0.15) {
+        const long = `${r.nom} (OD ${odTxt} mm)` + (steel ? ` ${steel}` : '');
+        return { primary: r.nom, secondary: `OD ${odTxt} mm` + (steel ? ` · ${steel}` : ''), long, d: od, steelDn: r.dn };
+      }
+      const long = `d${odTxt} (${odTxt} mm OD)` + (steel ? ` ${steel}` : '');
+      return { primary: `d${odTxt}`, secondary: `${odTxt} mm OD` + (steel ? ` · ${steel}` : ''), long, d: od, steelDn: r.dn };
+    }
+    if (r.nps) {
+      const long = `${r.nps} (${odTxt} mm OD)` + (r.dn != null ? ` · DN${r.dn}` : '');
+      return { primary: r.nps, secondary: r.dn != null ? `DN${r.dn}` : '', long, d: od, steelDn: r.dn };
+    }
+    const long = r.dn != null ? `DN${r.dn} (${odTxt} mm OD)` : `${odTxt} mm OD`;
+    return { primary: r.dn != null ? `DN${r.dn}` : odTxt + ' mm', secondary: '', long, d: od, steelDn: r.dn };
+  }
+
+  function sizeKeyForRow(r) {
+    if (r.nps) return 'nps:' + r.nps;
+    if (r.family === 'plastic' && r.dnBasis === 'nominal' && r.dn != null) return 'dn:' + r.dn;
+    if (r.nom && Math.abs(parseFloat(r.nom) - r.od) > 0.15) return 'nom:' + parseFloat(r.nom);
+    if (isOdPlastic(r)) return 'd:' + r.od;
+    return r.dn != null ? 'dn:' + r.dn : 'd:' + r.od;
+  }
+
+  /** Picker list when Working on… Plastics. Groups: metric (by OD) and imperial (by bore). */
+  function plasticSizeList(opts = {}) {
+    const src = ROWS.filter((r) => r.family === 'plastic' && (!opts.ukOnly || r.ukCommon) && inFamily(r, opts.family || 'plastic', opts.sub));
+    const metric = new Map(), imperial = new Map(), grp = new Map();
+    for (const r of src) {
+      if (r.nps) {
+        const k = 'nps:' + r.nps;
+        if (!imperial.has(k)) imperial.set(k, { value: k, kind: 'nps', nps: r.nps, od: r.od, dn: r.dn, sort: r.od,
+          label: `${r.nps} (${r.od} mm OD) · DN${r.dn}` });
+        continue;
+      }
+      if (r.dnBasis === 'nominal' && r.dn != null) {
+        const k = 'dn:' + r.dn;
+        if (!grp.has(k)) grp.set(k, { value: k, kind: 'dn', num: r.dn, od: r.od, dn: r.dn, sort: r.od,
+          label: `DN${r.dn} (${r.od} mm OD)` });
+        continue;
+      }
+      if (r.nom && Math.abs(parseFloat(r.nom) - r.od) > 0.15) {
+        const n = parseFloat(r.nom);
+        const k = 'nom:' + n;
+        if (!metric.has(k)) metric.set(k, { value: k, kind: 'nom', num: n, od: r.od, dn: r.dn, sort: r.od,
+          label: `${r.nom} (OD ${r.od} mm)` + (r.dn != null ? ` ≈ DN${r.dn}` : '') });
+        continue;
+      }
+      const n = r.od;
+      const k = 'd:' + n;
+      if (!metric.has(k)) {
+        const dlabel = Number.isInteger(n) ? String(n) : String(n);
+        metric.set(k, { value: k, kind: 'd', num: n, od: n, dn: r.dn, sort: n,
+          label: `d${dlabel} (${dlabel} mm OD)` + (r.dn != null ? ` ≈ DN${r.dn}` : '') });
+      }
+    }
+    const met = [...metric.values()].sort((a, b) => a.sort - b.sort);
+    const imp = [...imperial.values()].sort((a, b) => a.sort - b.sort);
+    const g = [...grp.values()].sort((a, b) => a.sort - b.sort);
+    return { metric: met, imperial: imp, grp: g, all: met.concat(imp, g) };
+  }
+
+  /** Rows whose plastic designation matches a picker value ('d:25', 'nps:1"', 'nom:32', 'dn:200'). */
+  function rowsForPlasticSize(value, opts = {}) {
+    const src = ROWS.filter((r) => r.family === 'plastic' && inFamily(r, opts.family || 'plastic', opts.sub));
+    if (value == null || value === '') return [];
+    const v = String(value);
+    if (v.startsWith('nps:')) {
+      const nps = v.slice(4);
+      return src.filter((r) => r.nps === nps).sort(sortRows);
+    }
+    if (v.startsWith('nom:')) {
+      const n = +v.slice(4);
+      return src.filter((r) => r.nom && parseFloat(r.nom) === n).sort(sortRows);
+    }
+    if (v.startsWith('dn:')) {
+      const n = +v.slice(3);
+      return src.filter((r) => r.dn === n && r.dnBasis === 'nominal').sort(sortRows);
+    }
+    const n = v.startsWith('d:') ? +v.slice(2) : +v;
+    if (Number.isNaN(n)) return [];
+    return src.filter((r) => {
+      if (r.nps) return false;
+      if (r.dnBasis === 'nominal') return false;
+      if (Math.abs(r.od - n) <= 0.05) return true;
+      if (r.nom && parseFloat(r.nom) === n) return true;
+      return false;
+    }).sort(sortRows);
+  }
+
   /** All DNs that have at least one row (any basis), 15–1200. opts.ukOnly hides DNs with only non-UK rows. */
   function dnList(opts = {}) {
     const src = ROWS.filter((r) => (!opts.ukOnly || r.ukCommon) && inFamily(r, opts.family, opts.sub));
@@ -1540,7 +1679,6 @@ const PipeLogic = (() => {
   /** Filter rows. f = { material, service, level ('good'|'possible'), q, ukOnly, family, sub } */
   function filterRows(rows, f = {}) {
     const q = (f.q || '').trim().toLowerCase();
-    const num = q && !isNaN(+q) ? +q : null;
     return rows.filter((r) => {
       if (f.ukOnly && !r.ukCommon) return false;
       if (!inFamily(r, f.family, f.sub)) return false;
@@ -1551,12 +1689,25 @@ const PipeLogic = (() => {
         if (s[0] === 'bad') return false;
         if ((f.level || 'good') === 'good' && s[0] !== 'good') return false;
       }
-      if (num != null) {
-        const near = Math.abs(r.od - num) <= Math.max(1, num * 0.02);
-        if (!(near || r.dn === num)) return false;
-      } else if (q) {
-        const hay = [r.standard, r.cls, r.label, MAT[r.material].name, r.nps || ''].join(' ').toLowerCase();
-        if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
+      if (q) {
+        const parsed = parseSizeQuery(q);
+        if (parsed.num != null) {
+          const n = parsed.num;
+          if (parsed.kind === 'd') {
+            const near = Math.abs(r.od - n) <= 0.15;
+            const nom = r.nom && parseFloat(r.nom) === n;
+            if (!(near || nom)) return false;
+          } else if (parsed.kind === 'dn') {
+            if (r.dn !== n) return false;
+          } else {
+            const near = Math.abs(r.od - n) <= Math.max(1, n * 0.02);
+            const nom = r.nom && parseFloat(r.nom) === n;
+            if (!(near || r.dn === n || nom)) return false;
+          }
+        } else {
+          const hay = [r.standard, r.cls, r.label, MAT[r.material].name, r.nps || '', r.nom || ''].join(' ').toLowerCase();
+          if (!q.split(/\s+/).every((w) => hay.includes(w))) return false;
+        }
       }
       return true;
     }).sort(sortRows);
@@ -1679,7 +1830,8 @@ const PipeLogic = (() => {
 
   return { data: D, MAT, SERIES, ROWS, similarDN, liningFor, dnList, rowsForDN, suit, filterRows,
     matchCouplings, twoPipe, coverage, round, UK_COMMON_DEFAULT, ukCommonGet, ukCommonSet, hiddenNonUk,
-    FAMILY_DEFAULT, inFamily, materialsInFamily, couplingInFamily, familyGet, familySet, hiddenByFamily, plasticGroups, inchVsMetric };
+    FAMILY_DEFAULT, inFamily, materialsInFamily, couplingInFamily, familyGet, familySet, hiddenByFamily, plasticGroups, inchVsMetric,
+    ISO161_DN, parseSizeQuery, isOdPlastic, sizeName, sizeKeyForRow, plasticSizeList, rowsForPlasticSize };
 })();
 
 if (typeof module !== 'undefined') module.exports = { PipeLogic };
@@ -1781,10 +1933,10 @@ const PipeUI = (() => {
   const src = (ids) => (ids || []).map((id) => D.sources[id]).filter(Boolean)
     .map((s) => s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)).join(' · ');
   const swatch = (m) => `<span class="swatch" style="background:${MAT[m].colour}"></span>`;
-  const dnTag = (r) => r.dnBasis === 'matching' ? `≈DN${r.dn}` : r.dnBasis === 'similar' ? `~DN${r.dn}` : `DN${r.dn}`;
+  const dnTag = (r) => r.dnBasis === 'matching' ? `≈DN${r.dn}` : r.dnBasis === 'similar' ? `≈DN${r.dn}` : `DN${r.dn}`;
 
   const fam0 = L.familyGet(localStorage);
-  const st = { dn: store.get('dn', 100), sel: null, tab: store.get('tab', 'size'), plastic: store.get('showPlastic', true),
+  const st = { dn: store.get('dn', 100), sizeKey: store.get('sizeKey', ''), sel: null, tab: store.get('tab', 'size'), plastic: store.get('showPlastic', true),
     ukOnly: L.ukCommonGet(localStorage), family: fam0.family, sub: fam0.sub,
     plSys: store.get('plSys', 'all'), plMat: store.get('plMat', 'all') };
   const FAMNAME = { plastic: 'Plastics', metal: 'Metals' };
@@ -1806,6 +1958,26 @@ const PipeUI = (() => {
     return msg;
   }
   function fillDnSelect() {
+    if (st.family === 'plastic') {
+      const lists = L.plasticSizeList({ ukOnly: st.ukOnly, family: 'plastic', sub: st.sub });
+      let html = '';
+      if (lists.metric.length) html += '<optgroup label="Metric (outside diameter)">' + lists.metric.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('') + '</optgroup>';
+      if (lists.imperial.length) html += '<optgroup label="Imperial (nominal bore)">' + lists.imperial.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('') + '</optgroup>';
+      if (lists.grp.length) html += '<optgroup label="GRP (nominal DN)">' + lists.grp.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('') + '</optgroup>';
+      $('dn').innerHTML = html;
+      $('dn').setAttribute('aria-label', 'Plastic pipe size by outside diameter');
+      const keys = lists.all.map((s) => s.value);
+      if (!keys.includes(st.sizeKey)) {
+        const want = st.sizeKey || ('d:' + st.dn);
+        const hit = lists.all.find((s) => s.value === want)
+          || lists.metric.find((s) => s.num === st.dn)
+          || lists.all.find((s) => s.dn === st.dn)
+          || lists.all[0];
+        st.sizeKey = hit ? hit.value : '';
+      }
+      return;
+    }
+    $('dn').setAttribute('aria-label', 'Nominal size DN');
     const list = activeDns();
     if (st.dn && !list.includes(st.dn) && L.dnList().includes(st.dn)) {
       list.push(st.dn); list.sort((a, b) => a - b);
@@ -1831,20 +2003,68 @@ const PipeUI = (() => {
     const sel = st.sel === r.key ? ' sel' : '';
     const flag = r.flag ? ` <span title="${esc(r.flag)}">⚠</span>` : '';
     const badge = (!st.ukOnly && !r.ukCommon) ? ' ' + pill('nonuk', 'non-UK') : '';
-    const sub = [r.nps, r.nom, r.dnBasis !== 'nominal' ? dnTag(r) : null, r.wallBasis === 'derived' ? 'wall derived' : null].filter(Boolean).join(' · ');
+    const nm = L.sizeName(r);
+    const sub = [L.isOdPlastic(r) ? nm.long : r.nps, !L.isOdPlastic(r) ? r.nom : null,
+      !L.isOdPlastic(r) && r.dnBasis !== 'nominal' ? dnTag(r) : null,
+      r.wallBasis === 'derived' ? 'wall derived' : null].filter(Boolean).join(' · ');
     const cells = { mat: `<td class="l pr-hide-sm">${esc(MAT[r.material].short)}</td>`,
-      dn: `<td>${esc(dnTag(r))}</td>` };
+      dn: `<td>${esc(L.isOdPlastic(r) ? nm.primary + (r.dn != null ? ' ' + dnTag(r) : '') : dnTag(r))}</td>` };
     return `<tr class="${sel}" data-key="${esc(r.key)}">${cols.includes('mat') ? cells.mat : ''}`
       + `<td class="l">${cols.includes('mat') ? swatch(r.material) : ''}${esc(r.standard)} <b>${esc(r.cls)}</b>${flag}${badge}${sub ? `<small>${esc(sub)}</small>` : ''}</td>`
       + `${cols.includes('dn') ? cells.dn : ''}<td><b>${n(r.od)}</b></td><td>${n(r.wall)}${r.wallBasis === 'minimum' ? '<small>min</small>' : ''}</td><td>${n(r.id)}</td></tr>`;
   }
 
+  function dnOdNoteHtml() {
+    if (st.family === 'plastic') {
+      return '<b>These sizes are the outside diameter.</b> Metric PVC, ABS and PE are designated by OD (ISO 161-1 / EN 1452): <b>d25 means 25 mm OD</b>, not steel DN25. The ≈DN is the usual steel/valve size (d25 ≈ DN20, d32 ≈ DN25). Imperial sizes are listed separately by nominal bore. EN 1401 / EN 1329 drainage is DN/OD, so d110 is 110 mm OD.';
+    }
+    const n = st.dn;
+    const odPipes = L.ROWS.filter((r) => L.isOdPlastic(r) && Math.abs(r.od - n) <= 0.05 && (!st.ukOnly || r.ukCommon));
+    const atDn = odPipes[0];
+    let html = '<b>DN is not the plastic OD.</b> Steel DN25 is 33.7 mm OD (ISO 6708 — the number is not a measured diameter). Metric plastic is sold by outside diameter (ISO 161-1): <b>d25 = 25 mm OD</b> (usual valve size DN20). The usual plastic for DN25 is <b>d32 (32 mm OD)</b>.';
+    if (atDn && atDn.dn != null && atDn.dn !== n) {
+      html += ` <button type="button" id="pr-jumpOd" class="pr-jump" data-jump-dn="${atDn.dn}" data-jump-d="${n}">View d${n} (${n} mm OD) — listed under DN${atDn.dn}</button>, or pick it under Plastics.`;
+    } else {
+      html += ' Switch to <button type="button" id="pr-jumpFam" class="pr-jump" data-jump-fam="plastic" data-jump-d="' + n + '">Plastics</button> to pick sizes by OD.';
+    }
+    return html;
+  }
+
   function renderSize() {
+    if (st.family === 'plastic') {
+      fillDnSelect();
+      $('dn').value = st.sizeKey;
+      store.set('sizeKey', st.sizeKey);
+      $('sizeHead').textContent = 'Pick a size (by outside diameter)';
+      $('dnOdNote').innerHTML = dnOdNoteHtml();
+      const list = L.plasticSizeList({ ukOnly: st.ukOnly, family: 'plastic', sub: st.sub }).all;
+      const stepAt = list.findIndex((x) => x.value === st.sizeKey);
+      $('dnPrev').disabled = stepAt <= 0;
+      $('dnNext').disabled = stepAt < 0 || stepAt >= list.length - 1;
+      const full = L.rowsForPlasticSize(st.sizeKey, { family: 'plastic', sub: st.sub });
+      const hidden = L.hiddenNonUk(full, st.ukOnly);
+      const rows = st.ukOnly ? full.filter((r) => r.ukCommon) : full;
+      setHiddenNote('sizeHidden', hidden);
+      if (st.tab === 'size') { $('ukCount').textContent = hiddenMsg(hidden); setFamCount(0); }
+      let html = '<thead><tr><th class="l">Standard · class</th><th>OD</th><th>Wall</th><th>ID nom.</th></tr></thead><tbody>';
+      let last = null;
+      for (const r of rows) {
+        if (r.material !== last) { last = r.material; html += `<tr class="grp"><td colspan="4">${swatch(r.material)}${esc(MAT[r.material].name)}</td></tr>`; }
+        html += rowHTML(r, []);
+      }
+      const picked = list.find((x) => x.value === st.sizeKey);
+      if (!rows.length) html += '<tr><td colspan="4" class="l">No rows for ' + esc(picked ? picked.label : 'this size') + (hidden ? ' with the UK filter on' : '') + '.</td></tr>';
+      $('sizeTable').innerHTML = html + '</tbody>';
+      if (!rows.find((r) => r.key === st.sel)) st.sel = (rows.find((r) => r.wall != null) || rows[0] || {}).key || null;
+      markSel(); renderDetail();
+      return;
+    }
     const DNS = activeDns();
     if (!L.dnList().includes(st.dn)) st.dn = 100;
     fillDnSelect();
     $('dn').value = st.dn; store.set('dn', st.dn);
-    // Stepper uses the UK-filtered DN list; a DN only in the full list still has neighbours.
+    $('sizeHead').textContent = 'Pick a nominal size';
+    $('dnOdNote').innerHTML = dnOdNoteHtml();
     const stepList = DNS.length ? DNS : L.dnList();
     const stepAt = stepList.indexOf(st.dn);
     const prevAt = stepAt >= 0 ? stepAt : stepList.filter((d) => d < st.dn).length;
@@ -1875,7 +2095,7 @@ const PipeUI = (() => {
     const r = L.ROWS.find((x) => x.key === st.sel);
     if (!r) { $('fitCard').hidden = $('matCard').hidden = true; return; }
     const m = MAT[r.material], s = L.SERIES[r.seriesId];
-    $('detTitle').textContent = `${m.short} · ${s.standard} ${r.cls} · ${dnTag(r)}`;
+    $('detTitle').textContent = `${m.short} · ${s.standard} ${r.cls} · ${L.sizeName(r).long}`;
     $('linWrap').hidden = !(r.lining && r.wall != null);
     $('drawing').innerHTML = PipeDrawing.crossSection(r, { colour: m.colour, lining: $('showLining').checked });
     let notes = '';
@@ -1943,7 +2163,7 @@ const PipeUI = (() => {
     const seen = new Set(), opts = ['<option value="">— pick —</option>'];
     rows.sort((a, b) => a.od - b.od).forEach((r) => {
       const k = r.od + '|' + r.standard; if (seen.has(k)) return; seen.add(k);
-      opts.push(`<option value="${r.od}">${esc(dnTag(r))} · ${n(r.od)} mm · ${esc(r.standard)}${r.flag ? ' ⚠' : ''}</option>`);
+      opts.push(`<option value="${r.od}">${esc(L.sizeName(r).long)} · ${esc(r.standard)}${r.flag ? ' ⚠' : ''}</option>`);
     });
     return opts.join('');
   }
@@ -2028,8 +2248,9 @@ const PipeUI = (() => {
       + cols.map((s) => `<th title="${esc(s.label)}">${esc(s.cls)}<small>wall · ID</small></th>`).join('') + '</tr></thead><tbody>';
     for (const sz of g.sizes) {
       const first = cols.map((s) => sz.cells[s.id]).find(Boolean);
-      const label = sz.nps ? esc(sz.nps) : sz.nom ? esc(sz.nom) : fmt(sz.od);
-      const sub = sz.nps ? `DN${sz.dn}` : sz.nom ? 'bore name' : 'mm';
+      const label = sz.nps ? esc(sz.nps) : sz.nom ? esc(sz.nom) : ('d' + fmt(sz.od));
+      const sub = sz.nps ? `DN${sz.dn}` : sz.nom ? (`OD ${fmt(sz.od)} mm` + (sz.dn != null ? ` · ≈ DN${sz.dn}` : ''))
+        : ((sz.dn != null ? `≈ DN${sz.dn} · ` : '') + fmt(sz.od) + ' mm OD');
       h += `<tr data-key="${esc(first.key)}"><td><b>${label}</b><small>${sub}</small></td><td><b>${fmt(sz.od)}</b></td>`
         + cols.map((s) => plasticCell(sz.cells[s.id])).join('') + '</tr>';
       cols.forEach((s) => { const r = sz.cells[s.id]; if (r && r.flag) flags.push(`${label} ${s.cls}: ${r.flag}`); });
@@ -2044,6 +2265,7 @@ const PipeUI = (() => {
     document.querySelectorAll('#pr-plSys button').forEach((b) => b.classList.toggle('on', b.dataset.sys === st.plSys));
     document.querySelectorAll('#pr-plMat button').forEach((b) => b.classList.toggle('on', b.dataset.make === st.plMat));
     $('plCement').textContent = '⚠ ' + D.plastics.cementWarning;
+    $('plDnNote').innerHTML = (D.plastics.dnVsOd || []).map(esc).join('<br>');
     const groups = L.plasticGroups({ system: st.plSys, make: st.plMat, ukOnly: st.ukOnly });
     const hiddenUk = L.plasticGroups({ system: st.plSys, make: st.plMat }).reduce((n, g) => n + g.series.length, 0)
       - groups.reduce((n, g) => n + g.series.length, 0);
@@ -2130,8 +2352,29 @@ const PipeUI = (() => {
     $('sources').innerHTML = Object.values(D.sources).map((s) => `<li>${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : esc(s.title)}</li>`).join('');
 
     document.querySelectorAll('#pr-modeSeg button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.mode)));
-    $('dn').addEventListener('change', () => { st.dn = +$('dn').value; st.sel = null; renderSize(); });
+    $('dn').addEventListener('change', () => {
+      if (st.family === 'plastic') {
+        st.sizeKey = $('dn').value;
+        const item = L.plasticSizeList({ ukOnly: st.ukOnly, family: 'plastic', sub: st.sub }).all.find((x) => x.value === st.sizeKey);
+        if (item && item.dn != null) st.dn = item.dn;
+        else if (item && item.num != null) st.dn = item.num;
+        store.set('sizeKey', st.sizeKey);
+      } else {
+        st.dn = +$('dn').value;
+      }
+      st.sel = null; renderSize();
+    });
     const stepDn = (dir) => {
+      if (st.family === 'plastic') {
+        const list = L.plasticSizeList({ ukOnly: st.ukOnly, family: 'plastic', sub: st.sub }).all;
+        let i = list.findIndex((x) => x.value === st.sizeKey);
+        if (i < 0) i = 0;
+        i = Math.max(0, Math.min(list.length - 1, i + dir));
+        st.sizeKey = list[i].value;
+        if (list[i].dn != null) st.dn = list[i].dn;
+        st.sel = null; renderSize();
+        return;
+      }
       const list = activeDns().length ? activeDns() : L.dnList();
       let i = list.indexOf(st.dn);
       if (i < 0) i = dir < 0 ? list.filter((d) => d < st.dn).length : Math.max(0, list.filter((d) => d <= st.dn).length - 1);
@@ -2149,6 +2392,23 @@ const PipeUI = (() => {
       renderSize(); renderCouple(); renderBrowse(); if (st.tab === 'plastics') renderPlastics();
     });
     document.querySelectorAll('#pr-famSeg button').forEach((b) => b.addEventListener('click', () => applyFamily(b.dataset.fam, 'all')));
+    $('dnOdNote').addEventListener('click', (e) => {
+      const b = e.target.closest('button.pr-jump');
+      if (!b) return;
+      const d = b.dataset.jumpD;
+      if (b.dataset.jumpFam === 'plastic') {
+        st.sizeKey = d ? ('d:' + d) : st.sizeKey;
+        applyFamily('plastic', 'all');
+        return;
+      }
+      if (b.dataset.jumpDn) {
+        st.dn = +b.dataset.jumpDn;
+        st.sizeKey = d ? ('d:' + d) : st.sizeKey;
+        renderSize();
+        const row = document.querySelector('#pr-sizeTable tr[data-key]');
+        if (row) { st.sel = row.dataset.key; markSel(); renderDetail(); }
+      }
+    });
     $('subChips').addEventListener('click', (e) => { const b = e.target.closest('button[data-sub]'); if (b) applyFamily(st.family, b.dataset.sub); });
     document.querySelectorAll('#pr-plSys button').forEach((b) => b.addEventListener('click', () => { st.plSys = b.dataset.sys; store.set('plSys', st.plSys); renderPlastics(); }));
     document.querySelectorAll('#pr-plMat button').forEach((b) => b.addEventListener('click', () => { st.plMat = b.dataset.make; store.set('plMat', st.plMat); renderPlastics(); }));
@@ -2156,7 +2416,7 @@ const PipeUI = (() => {
       const tr = e.target.closest('tr[data-key]'); if (!tr) return;
       const r = L.ROWS.find((x) => x.key === tr.dataset.key); if (!r || r.dn == null) return;
       if (!inFam(r)) applyFamily('all', 'all');
-      st.dn = r.dn; st.sel = r.key; st.plastic = true; store.set('showPlastic', true); $('showPlastic').checked = true;
+      st.dn = r.dn; st.sizeKey = L.sizeKeyForRow(r); st.sel = r.key; st.plastic = true; store.set('showPlastic', true); $('showPlastic').checked = true;
       setTab('size'); renderSize(); st.sel = r.key; markSel(); renderDetail(); window.scrollTo(0, 0);
     });
     $('showLining').addEventListener('change', renderDetail);
@@ -2164,7 +2424,7 @@ const PipeUI = (() => {
       if (window.innerWidth < 900) $('detail').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
     $('bTable').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-key]'); if (!tr) return;
       const r = L.ROWS.find((x) => x.key === tr.dataset.key); if (!r || r.dn == null) return;
-      st.dn = r.dn; st.sel = r.key; if (r.dnBasis !== 'nominal') { st.plastic = true; $('showPlastic').checked = true; }
+      st.dn = r.dn; st.sizeKey = L.sizeKeyForRow(r); st.sel = r.key; if (r.dnBasis !== 'nominal') { st.plastic = true; $('showPlastic').checked = true; }
       setTab('size'); renderSize(); st.sel = r.key; markSel(); renderDetail(); window.scrollTo(0, 0); });
 
     const c = store.get('couple', {});
