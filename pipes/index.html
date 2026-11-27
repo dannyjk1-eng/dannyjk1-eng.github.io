@@ -127,6 +127,20 @@
   .pr-app .note.pr-dnod b { font-weight: 650; }
   .pr-app button.pr-jump { appearance: none; background: none; border: 0; padding: 0; color: var(--brand); font: inherit; font-weight: 650; cursor: pointer; text-decoration: underline; }
   @media (max-width: 480px) { .pr-app table.data th, .pr-app table.data td { padding: 3px 4px; } .pr-app .pr-hide-sm { display: none; } }
+  .pr-app .pr-sizepicks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+  .pr-app .pr-sizepicks .field { margin-bottom: 0; }
+  .pr-app .pr-sizepicks .field label { margin-bottom: 4px; }
+  .pr-app .pr-compat { background: #f4f8fc; border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 8px; padding: 10px 12px; margin: 8px 0 10px; font-size: .86rem; }
+  .pr-app .pr-compat h3 { margin: 0 0 6px; font-size: .95rem; }
+  .pr-app .pr-compat ul { margin: 6px 0 0; padding-left: 1.2em; }
+  .pr-app table.data.pr-joint { font-size: .78rem; }
+  .pr-app table.data.pr-joint th { white-space: normal; min-width: 4.4em; font-size: .72rem; }
+  .pr-app .pr-yes { color: var(--good); font-weight: 650; }
+  .pr-app .pr-no { color: var(--bad); font-weight: 650; }
+  .pr-app .pr-cau { color: var(--close); font-weight: 650; }
+  .pr-app .pr-cementcard { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: .84rem; background: #fff; }
+  .pr-app .pr-cementcard h3 { margin: 0 0 4px; }
+  @media (max-width: 640px) { .pr-app .pr-sizepicks { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body class="pr-app">
@@ -169,13 +183,40 @@
 <main class="pr-main pr-split" id="pr-sizeMain">
   <section class="card">
     <h2 id="pr-sizeHead">Pick a nominal size</h2>
-    <div class="field">
+    <div class="field" id="pr-dnField">
       <div class="stepper">
         <button type="button" id="pr-dnPrev" aria-label="Smaller size">‹</button>
         <select id="pr-dn" aria-label="Nominal size DN"></select>
         <button type="button" id="pr-dnNext" aria-label="Larger size">›</button>
       </div>
     </div>
+    <div class="pr-sizepicks" id="pr-plSizeWrap" hidden>
+      <div class="field">
+        <label for="pr-dnMet">Metric (outside diameter)</label>
+        <div class="stepper">
+          <button type="button" id="pr-metPrev" aria-label="Smaller metric size">‹</button>
+          <select id="pr-dnMet" aria-label="Metric plastic size by outside diameter"></select>
+          <button type="button" id="pr-metNext" aria-label="Larger metric size">›</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="pr-dnImp">Imperial (nominal inch)</label>
+        <div class="stepper">
+          <button type="button" id="pr-impPrev" aria-label="Smaller imperial size">‹</button>
+          <select id="pr-dnImp" aria-label="Imperial plastic size by nominal inch"></select>
+          <button type="button" id="pr-impNext" aria-label="Larger imperial size">›</button>
+        </div>
+      </div>
+      <div class="field" id="pr-dnGrpWrap" hidden>
+        <label for="pr-dnGrp">GRP (nominal DN)</label>
+        <div class="stepper">
+          <button type="button" id="pr-grpPrev" aria-label="Smaller GRP size">‹</button>
+          <select id="pr-dnGrp" aria-label="GRP nominal DN"></select>
+          <button type="button" id="pr-grpNext" aria-label="Larger GRP size">›</button>
+        </div>
+      </div>
+    </div>
+    <div class="pr-compat" id="pr-compatBox" hidden></div>
     <div class="checks" style="margin-bottom:8px">
       <label><input type="checkbox" id="pr-showPlastic" checked> Include plastics sized by OD</label>
     </div>
@@ -269,13 +310,36 @@
       <div class="field"><label>Plastic</label>
         <div class="seg" id="pr-plMat"><button type="button" data-make="all">All</button><button type="button" data-make="pvc">PVC</button><button type="button" data-make="abs">ABS</button></div></div>
     </div>
+    <div class="pr-sizepicks" id="pr-tabSizeWrap">
+      <div class="field">
+        <label for="pr-tabMet">Metric (outside diameter)</label>
+        <div class="stepper">
+          <button type="button" id="pr-tabMetPrev" aria-label="Smaller metric size">‹</button>
+          <select id="pr-tabMet" aria-label="Metric plastic size by outside diameter"></select>
+          <button type="button" id="pr-tabMetNext" aria-label="Larger metric size">›</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="pr-tabImp">Imperial (nominal inch)</label>
+        <div class="stepper">
+          <button type="button" id="pr-tabImpPrev" aria-label="Smaller imperial size">‹</button>
+          <select id="pr-tabImp" aria-label="Imperial plastic size by nominal inch"></select>
+          <button type="button" id="pr-tabImpNext" aria-label="Larger imperial size">›</button>
+        </div>
+      </div>
+    </div>
+    <div class="pr-compat" id="pr-plCompat" hidden></div>
     <div class="pr-cement" id="pr-plCement"></div>
     <div class="note pr-dnod" id="pr-plDnNote"></div>
-    <div class="note">Walls are the standards’ <b>minimum</b> walls, ID = OD − 2 × wall (nominal). Imperial pipe is named by bore, metric by OD. ⚠ = a figure the sources disagree on or could not confirm. Tap a row to see it in By size.</div>
+    <div class="note">Walls are the standards’ <b>minimum</b> walls. Where shown, <b>nom</b> is a manufacturer product wall and <b>max</b> is the standard maximum. ID = OD − 2 × min wall. Imperial pipe is named by bore, metric by OD. ⚠ = a figure that is not a published min, max or product wall. Tap a row to see it in By size.</div>
+  </section>
+  <section class="card" id="pr-plJoint">
+    <h2>Jointing methods and cements</h2>
+    <div id="pr-plJointBody"></div>
   </section>
   <div id="pr-plGroups"></div>
   <section class="card" id="pr-plCompare">
-    <h2>Imperial vs metric PVC — why they don’t mix</h2>
+    <h2>Metric and imperial — will they fit?</h2>
     <div id="pr-plCompareBody"></div>
   </section>
 </main>
@@ -286,7 +350,7 @@
     always check the manufacturer’s data, the WRAS / Regulation 31 listing for the exact product, and the asset record,
     and measure the OD before ordering a coupling or adaptor.</p>
   <details><summary>Sources</summary><ul class="pr-list" id="pr-sources"></ul></details>
-  <p><a href="../">← Flange ID</a> (sister app) · Pipe Reference v5</p>
+  <p><a href="../">← Flange ID</a> (sister app) · Pipe Reference v6</p>
 </footer>
 
 <script src="pipe-data.js"></script>
@@ -330,26 +394,125 @@ const PipeUI = (() => {
     el.hidden = !msg; el.textContent = msg;
     return msg;
   }
-  function fillDnSelect() {
-    if (st.family === 'plastic') {
-      const lists = L.plasticSizeList({ ukOnly: st.ukOnly, family: 'plastic', sub: st.sub });
-      let html = '';
-      if (lists.metric.length) html += '<optgroup label="Metric (outside diameter)">' + lists.metric.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('') + '</optgroup>';
-      if (lists.imperial.length) html += '<optgroup label="Imperial (nominal bore)">' + lists.imperial.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('') + '</optgroup>';
-      if (lists.grp.length) html += '<optgroup label="GRP (nominal DN)">' + lists.grp.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('') + '</optgroup>';
-      $('dn').innerHTML = html;
-      $('dn').setAttribute('aria-label', 'Plastic pipe size by outside diameter');
-      const keys = lists.all.map((s) => s.value);
-      if (!keys.includes(st.sizeKey)) {
-        const want = st.sizeKey || ('d:' + st.dn);
-        const hit = lists.all.find((s) => s.value === want)
-          || lists.metric.find((s) => s.num === st.dn)
-          || lists.all.find((s) => s.dn === st.dn)
-          || lists.all[0];
-        st.sizeKey = hit ? hit.value : '';
+  function plasticLists() { return L.plasticSizeList({ ukOnly: st.ukOnly, family: 'plastic', sub: st.sub }); }
+  function ensurePlasticSizeKey(opts = {}) {
+    const lists = plasticLists();
+    const keys = lists.all.map((s) => s.value);
+    if (keys.includes(st.sizeKey)) return st.sizeKey;
+    if (opts.allowEmpty && !st.sizeKey) return '';
+    const want = st.sizeKey || (st.dn ? ('d:' + st.dn) : 'd:25');
+    const hit = lists.all.find((s) => s.value === want)
+      || lists.metric.find((s) => s.num === st.dn)
+      || lists.metric.find((s) => s.value === 'd:25')
+      || lists.all[0];
+    st.sizeKey = hit ? hit.value : '';
+    return st.sizeKey;
+  }
+  function fillOnePicker(sel, list, blank, selected) {
+    const opts = `<option value="">${esc(blank)}</option>` + list.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('');
+    sel.innerHTML = opts;
+    sel.value = list.some((s) => s.value === selected) ? selected : '';
+  }
+  function fillPlasticPickers() {
+    const lists = plasticLists();
+    const key = st.sizeKey;
+    const isMet = key.startsWith('d:') || key.startsWith('nom:');
+    const isImp = key.startsWith('nps:');
+    const isGrp = key.startsWith('dn:');
+    fillOnePicker($('dnMet'), lists.metric, '— pick a metric size —', isMet ? key : '');
+    fillOnePicker($('dnImp'), lists.imperial, '— pick an imperial size —', isImp ? key : '');
+    fillOnePicker($('dnGrp'), lists.grp, '— pick a GRP size —', isGrp ? key : '');
+    $('dnGrpWrap').hidden = !lists.grp.length;
+    fillOnePicker($('tabMet'), lists.metric, '— all metric sizes —', isMet ? key : '');
+    fillOnePicker($('tabImp'), lists.imperial, '— all imperial sizes —', isImp ? key : '');
+    const metAt = lists.metric.findIndex((s) => s.value === key);
+    const impAt = lists.imperial.findIndex((s) => s.value === key);
+    const grpAt = lists.grp.findIndex((s) => s.value === key);
+    $('metPrev').disabled = !isMet || metAt <= 0;
+    $('metNext').disabled = !isMet || metAt >= lists.metric.length - 1;
+    $('impPrev').disabled = !isImp || impAt <= 0;
+    $('impNext').disabled = !isImp || impAt >= lists.imperial.length - 1;
+    $('grpPrev').disabled = !isGrp || grpAt <= 0;
+    $('grpNext').disabled = !isGrp || grpAt >= lists.grp.length - 1;
+    $('tabMetPrev').disabled = !isMet || metAt <= 0;
+    $('tabMetNext').disabled = !isMet || metAt >= lists.metric.length - 1;
+    $('tabImpPrev').disabled = !isImp || impAt <= 0;
+    $('tabImpNext').disabled = !isImp || impAt >= lists.imperial.length - 1;
+  }
+  function setPlasticSize(value, opts = {}) {
+    st.sizeKey = value || '';
+    if (!(opts.allowEmpty && !st.sizeKey)) ensurePlasticSizeKey(opts);
+    const item = plasticLists().all.find((s) => s.value === st.sizeKey);
+    if (item && item.dn != null) st.dn = item.dn;
+    else if (item && item.od != null) st.dn = item.od;
+    store.set('sizeKey', st.sizeKey);
+    st.sel = null;
+    if (st.family === 'plastic') renderSize();
+    if (st.tab === 'plastics') renderPlastics();
+  }
+  function stepPlastic(listName, dir) {
+    const lists = plasticLists();
+    const list = lists[listName] || [];
+    let i = list.findIndex((s) => s.value === st.sizeKey);
+    if (i < 0) i = dir > 0 ? -1 : 0;
+    i = Math.max(0, Math.min(list.length - 1, i + dir));
+    if (list[i]) setPlasticSize(list[i].value);
+  }
+  function compatHTML(sizeKey) {
+    const c = L.compatForSize(sizeKey, { ukOnly: st.ukOnly, family: 'plastic', sub: st.sub });
+    if (!c) return '';
+    const item = c.item;
+    let h = `<h3>Metric / imperial fit — ${esc(item.label)}</h3>`;
+    if (c.counterpart) {
+      const d = c.pairDiff;
+      const dTxt = (d > 0 ? '+' : '') + d + ' mm';
+      if (c.interchangeable) {
+        h += `<p><b>These ODs are interchangeable.</b> ${esc(item.label)} and ${esc(c.counterpart.label)} (Δ ${esc(dTxt)}) can take the same fittings (Durapipe; GF). No adaptor is required.</p>`;
+      } else {
+        h += `<p><b>A metric fitting will not fit this imperial pipe, or the other way around.</b> Nearest counterpart: ${esc(c.counterpart.label)} (OD difference ${esc(dTxt)}).</p>`;
       }
+    } else {
+      h += '<p>No inch / metric counterpart is listed for this size in the BS 3505 / EN 1452 comparison.</p>';
+    }
+    h += '<ul>';
+    if (c.adaptors.length) {
+      c.adaptors.forEach((x) => {
+        const a = x.adaptor;
+        x.sizes.forEach((s) => {
+          const pair = s.metric != null ? `${s.nps} × ${s.metric} mm` : s.nps;
+          h += `<li><b>${esc(a.maker)} ${esc(a.name)}</b> — ${esc(pair)}${s.code ? ' (code ' + esc(s.code) + ')' : ''}, ${esc(a.pn)}. ${esc(a.cement)}. ${esc(a.notes)}</li>`;
+        });
+      });
+    } else if (!c.interchangeable && item.kind !== 'dn') {
+      h += '<li>No Durapipe imperial/metric socket adaptor is listed for this size in the specification guides used here. Join with flanges (use a matching metric or imperial backing ring — do not mix them) or a wide-range mechanical coupling if one range covers both ODs.</li>';
+    }
+    if (c.transitions.length && (item.kind === 'nps' || (c.counterpart && c.counterpart.kind === 'nps'))) {
+      c.transitions.forEach((x) => {
+        const a = x.adaptor;
+        h += `<li><b>ABS to PVC-U:</b> ${esc(a.maker)} ${esc(a.name)} — ${x.sizes.map((s) => s.nps).join(', ')}, ${esc(a.pn)}. ${esc(a.notes)} Use ${esc(a.cement)}.</li>`;
+      });
+    } else if (item.kind === 'nps' || item.kind === 'd') {
+      h += '<li>PVC-U and ABS cements are not interchangeable. To join ABS to PVC-U use a purpose-made transition union (GF lists ½"–2" inch) or a mechanical coupling — do not solvent-weld one material into a fitting of the other.</li>';
+    }
+    if (c.couplings.length) {
+      const names = [...new Set(c.couplings.map((x) => `${x.coupling.maker} ${x.coupling.name} (${x.label}, ${x.min}–${x.max} mm)`))];
+      h += `<li><b>Wide-range couplings</b> whose published range covers both ODs (${esc(item.od + ' mm')} and ${esc((c.counterpart && c.counterpart.od) + ' mm')}): ${esc(names.join('; '))}. Measure both ODs. See the Couplings tab.</li>`;
+    } else if (c.counterpart && !c.interchangeable) {
+      h += '<li>No single wide-range coupling in this app has a published range that covers both ODs. Check the Couplings tab, or use an adaptor or a pair of flange adaptors.</li>';
+    }
+    h += '</ul>';
+    h += `<div class="note">Source: ${src(c.sources)}</div>`;
+    return h;
+  }
+  function fillDnSelect() {
+    const plastic = st.family === 'plastic';
+    $('dnField').hidden = plastic;
+    $('plSizeWrap').hidden = !plastic;
+    if (plastic) {
+      fillPlasticPickers();
       return;
     }
+    $('compatBox').hidden = true;
     $('dn').setAttribute('aria-label', 'Nominal size DN');
     const list = activeDns();
     if (st.dn && !list.includes(st.dn) && L.dnList().includes(st.dn)) {
@@ -377,43 +540,40 @@ const PipeUI = (() => {
     const flag = r.flag ? ` <span title="${esc(r.flag)}">⚠</span>` : '';
     const badge = (!st.ukOnly && !r.ukCommon) ? ' ' + pill('nonuk', 'non-UK') : '';
     const nm = L.sizeName(r);
-    const sub = [L.isOdPlastic(r) ? nm.long : r.nps, !L.isOdPlastic(r) ? r.nom : null,
-      !L.isOdPlastic(r) && r.dnBasis !== 'nominal' ? dnTag(r) : null,
+    const sub = [r.family === 'plastic' ? nm.long : r.nps, r.family !== 'plastic' ? r.nom : null,
+      r.family !== 'plastic' && r.dnBasis !== 'nominal' ? dnTag(r) : null,
       r.wallBasis === 'derived' ? 'wall derived' : null].filter(Boolean).join(' · ');
     const cells = { mat: `<td class="l pr-hide-sm">${esc(MAT[r.material].short)}</td>`,
-      dn: `<td>${esc(L.isOdPlastic(r) ? nm.primary + (r.dn != null ? ' ' + dnTag(r) : '') : dnTag(r))}</td>` };
+      dn: `<td>${esc(r.family === 'plastic' ? nm.primary : dnTag(r))}</td>` };
     return `<tr class="${sel}" data-key="${esc(r.key)}">${cols.includes('mat') ? cells.mat : ''}`
       + `<td class="l">${cols.includes('mat') ? swatch(r.material) : ''}${esc(r.standard)} <b>${esc(r.cls)}</b>${flag}${badge}${sub ? `<small>${esc(sub)}</small>` : ''}</td>`
       + `${cols.includes('dn') ? cells.dn : ''}<td><b>${n(r.od)}</b></td><td>${n(r.wall)}${r.wallBasis === 'minimum' ? '<small>min</small>' : ''}</td><td>${n(r.id)}</td></tr>`;
   }
 
   function dnOdNoteHtml() {
-    if (st.family === 'plastic') {
-      return '<b>These sizes are the outside diameter.</b> Metric PVC, ABS and PE are designated by OD (ISO 161-1 / EN 1452): <b>d25 means 25 mm OD</b>, not steel DN25. The ≈DN is the usual steel/valve size (d25 ≈ DN20, d32 ≈ DN25). Imperial sizes are listed separately by nominal bore. EN 1401 / EN 1329 drainage is DN/OD, so d110 is 110 mm OD.';
-    }
+    const line = 'Metric plastic is sold by outside diameter: a 25 mm pipe is 25.0 mm OD. Steel DN25 is 33.7 mm OD.';
+    if (st.family === 'plastic') return line;
     const n = st.dn;
-    const odPipes = L.ROWS.filter((r) => L.isOdPlastic(r) && Math.abs(r.od - n) <= 0.05 && (!st.ukOnly || r.ukCommon));
-    const atDn = odPipes[0];
-    let html = '<b>DN is not the plastic OD.</b> Steel DN25 is 33.7 mm OD (ISO 6708 — the number is not a measured diameter). Metric plastic is sold by outside diameter (ISO 161-1): <b>d25 = 25 mm OD</b> (usual valve size DN20). The usual plastic for DN25 is <b>d32 (32 mm OD)</b>.';
-    if (atDn && atDn.dn != null && atDn.dn !== n) {
-      html += ` <button type="button" id="pr-jumpOd" class="pr-jump" data-jump-dn="${atDn.dn}" data-jump-d="${n}">View d${n} (${n} mm OD) — listed under DN${atDn.dn}</button>, or pick it under Plastics.`;
+    const hasOd = L.ROWS.some((r) => L.isOdPlastic(r) && Math.abs(r.od - n) <= 0.05 && (!st.ukOnly || r.ukCommon));
+    let html = line;
+    if (hasOd) {
+      html += ` Plastic pipes listed here under DN${n} are grouped by similar or equivalent-bore OD — they are not named “DN${n} plastic”. <button type="button" id="pr-jumpFam" class="pr-jump" data-jump-fam="plastic" data-jump-d="${n}">Look up ${n} mm plastic</button>.`;
     } else {
-      html += ' Switch to <button type="button" id="pr-jumpFam" class="pr-jump" data-jump-fam="plastic" data-jump-d="' + n + '">Plastics</button> to pick sizes by OD.';
+      html += ` <button type="button" id="pr-jumpFam" class="pr-jump" data-jump-fam="plastic" data-jump-d="${n}">Look up plastic sizes by OD</button>.`;
     }
     return html;
   }
 
   function renderSize() {
     if (st.family === 'plastic') {
+      ensurePlasticSizeKey();
       fillDnSelect();
-      $('dn').value = st.sizeKey;
       store.set('sizeKey', st.sizeKey);
-      $('sizeHead').textContent = 'Pick a size (by outside diameter)';
+      $('sizeHead').textContent = 'Pick a metric or imperial size';
       $('dnOdNote').innerHTML = dnOdNoteHtml();
-      const list = L.plasticSizeList({ ukOnly: st.ukOnly, family: 'plastic', sub: st.sub }).all;
-      const stepAt = list.findIndex((x) => x.value === st.sizeKey);
-      $('dnPrev').disabled = stepAt <= 0;
-      $('dnNext').disabled = stepAt < 0 || stepAt >= list.length - 1;
+      const htmlC = compatHTML(st.sizeKey);
+      $('compatBox').hidden = !htmlC;
+      $('compatBox').innerHTML = htmlC;
       const full = L.rowsForPlasticSize(st.sizeKey, { family: 'plastic', sub: st.sub });
       const hidden = L.hiddenNonUk(full, st.ukOnly);
       const rows = st.ukOnly ? full.filter((r) => r.ukCommon) : full;
@@ -425,7 +585,7 @@ const PipeUI = (() => {
         if (r.material !== last) { last = r.material; html += `<tr class="grp"><td colspan="4">${swatch(r.material)}${esc(MAT[r.material].name)}</td></tr>`; }
         html += rowHTML(r, []);
       }
-      const picked = list.find((x) => x.value === st.sizeKey);
+      const picked = plasticLists().all.find((x) => x.value === st.sizeKey);
       if (!rows.length) html += '<tr><td colspan="4" class="l">No rows for ' + esc(picked ? picked.label : 'this size') + (hidden ? ' with the UK filter on' : '') + '.</td></tr>';
       $('sizeTable').innerHTML = html + '</tbody>';
       if (!rows.find((r) => r.key === st.sel)) st.sel = (rows.find((r) => r.wall != null) || rows[0] || {}).key || null;
@@ -474,9 +634,17 @@ const PipeUI = (() => {
     let notes = '';
     if (r.flag) notes += `<div class="flag">⚠ ${esc(r.flag)}</div>`;
     if (r.wall == null) notes += '<div class="note">The standard/source gives the OD only for this row, so no ID is shown.</div>';
-    if (r.wallBasis === 'minimum') notes += '<div class="note">Wall is the standard’s <b>minimum</b>; the real wall is usually a little thicker, so the real bore is a little smaller.</div>';
-    if (r.dnBasis === 'matching') notes += `<div class="note">≈DN${r.dn}: PE ${r.od} mm is the usual equivalent-bore replacement for DN${r.dn}.</div>`;
-    if (r.dnBasis === 'similar') notes += `<div class="note">~DN${r.dn}: OD is within 10% of DN${r.dn} steel — similar outside size, not an equivalent bore.</div>`;
+    if (r.wallBasis === 'minimum') {
+      let w = 'Wall is the standard’s <b>minimum</b>';
+      if (r.wallNom != null) w += `; the manufacturer’s published product wall is <b>${n(r.wallNom)} mm</b>`;
+      if (r.wallMax != null) w += `; the standard maximum is <b>${n(r.wallMax)} mm</b>`;
+      w += '. The real bore is a little smaller than OD − 2 × min wall.';
+      notes += `<div class="note">${w}</div>`;
+    }
+    if (r.family === 'plastic' && r.dnBasis === 'matching') notes += `<div class="note">This ${n(r.od)} mm pipe is the usual equivalent-bore plastic for steel DN${r.dn} — it is not named “DN${r.dn} plastic”.</div>`;
+    if (r.family === 'plastic' && r.dnBasis === 'similar') notes += `<div class="note">The ${n(r.od)} mm OD is within 10% of steel DN${r.dn} — similar outside size, not an equivalent bore, and not named “DN${r.dn} plastic”.</div>`;
+    if (r.family !== 'plastic' && r.dnBasis === 'matching') notes += `<div class="note">≈DN${r.dn}: PE ${r.od} mm is the usual equivalent-bore replacement for DN${r.dn}.</div>`;
+    if (r.family !== 'plastic' && r.dnBasis === 'similar') notes += `<div class="note">~DN${r.dn}: OD is within 10% of DN${r.dn} steel — similar outside size, not an equivalent bore.</div>`;
     (s.notes || []).forEach((t) => { notes += `<div class="note">${esc(t)}</div>`; });
     notes += `<div class="note">Source: ${src(r.sources)}</div>`;
     $('rowNotes').innerHTML = notes;
@@ -609,7 +777,8 @@ const PipeUI = (() => {
   const fmt = (x) => (x == null ? '—' : String(L.round(x, 2)));
   function plasticCell(r) {
     if (!r) return '<td class="na">–</td>';
-    return `<td><b>${fmt(r.wall)}</b>${r.flag ? ` <span title="${esc(r.flag)}">⚠</span>` : ''}<small>ID ${fmt(r.id)}</small></td>`;
+    const extra = [r.wallNom != null ? 'nom ' + fmt(r.wallNom) : null, r.wallMax != null ? 'max ' + fmt(r.wallMax) : null].filter(Boolean).join(' · ');
+    return `<td><b>${fmt(r.wall)}</b>${r.wallBasis === 'minimum' ? '<small>min</small>' : ''}${r.flag ? ` <span title="${esc(r.flag)}">⚠</span>` : ''}<small>ID ${fmt(r.id)}${extra ? ' · ' + extra : ''}</small></td>`;
   }
   function groupHTML(g) {
     const G = g.group, cols = g.series;
@@ -621,9 +790,8 @@ const PipeUI = (() => {
       + cols.map((s) => `<th title="${esc(s.label)}">${esc(s.cls)}<small>wall · ID</small></th>`).join('') + '</tr></thead><tbody>';
     for (const sz of g.sizes) {
       const first = cols.map((s) => sz.cells[s.id]).find(Boolean);
-      const label = sz.nps ? esc(sz.nps) : sz.nom ? esc(sz.nom) : ('d' + fmt(sz.od));
-      const sub = sz.nps ? `DN${sz.dn}` : sz.nom ? (`OD ${fmt(sz.od)} mm` + (sz.dn != null ? ` · ≈ DN${sz.dn}` : ''))
-        : ((sz.dn != null ? `≈ DN${sz.dn} · ` : '') + fmt(sz.od) + ' mm OD');
+      const label = sz.nps ? esc(sz.nps) : sz.nom ? esc(sz.nom) : (fmt(sz.od) + ' mm');
+      const sub = 'OD ' + fmt(sz.od) + ' mm';
       h += `<tr data-key="${esc(first.key)}"><td><b>${label}</b><small>${sub}</small></td><td><b>${fmt(sz.od)}</b></td>`
         + cols.map((s) => plasticCell(sz.cells[s.id])).join('') + '</tr>';
       cols.forEach((s) => { const r = sz.cells[s.id]; if (r && r.flag) flags.push(`${label} ${s.cls}: ${r.flag}`); });
@@ -634,24 +802,81 @@ const PipeUI = (() => {
     h += `<details><summary>Notes and sources</summary>${notes.map((t) => `<div class="note">${esc(t)}</div>`).join('')}<div class="note">Source: ${src(G.sources)}</div></details></section>`;
     return h;
   }
+  function jointingHTML() {
+    const J = D.plastics;
+    const mark = { yes: '<span class="pr-yes">Yes</span>', no: '<span class="pr-no">No</span>', caution: '<span class="pr-cau">Caution</span>' };
+    let h = '<div class="pr-cement">⚠ ' + esc(J.cementWarning) + '</div>';
+    h += '<div class="note">' + (J.jointRules || []).map(esc).join('<br>') + '</div>';
+    h += '<div class="scroll"><table class="data pr-joint"><thead><tr><th class="l">Material</th>'
+      + J.jointMethods.map((m) => `<th>${esc(m.label)}</th>`).join('') + '</tr></thead><tbody>';
+    J.jointMaterials.forEach((mat) => {
+      h += `<tr><td class="l"><b>${esc(mat.name)}</b></td>`;
+      J.jointMethods.forEach((m) => {
+        const v = mat.methods[m.id];
+        h += v ? `<td title="${esc(v[1])}">${mark[v[0]] || esc(v[0])}</td>` : '<td class="na">–</td>';
+      });
+      h += '</tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div class="note">Tap or long-press a cell on a phone, or hover, to read the note. Details for each method are also in the material cards below when you open Notes.</div>';
+    J.jointMaterials.forEach((mat) => {
+      h += `<details><summary>${esc(mat.name)} — method notes</summary><dl class="pr-facts">`;
+      J.jointMethods.forEach((m) => {
+        const v = mat.methods[m.id];
+        if (v) h += `<dt>${esc(m.label)}</dt><dd>${mark[v[0]] || ''} ${esc(v[1])}</dd>`;
+      });
+      h += `</dl><div class="note">Source: ${src(mat.sources)}</div></details>`;
+    });
+    h += '<h3>Cements, cleaners and primers</h3>';
+    (J.cements || []).forEach((c) => {
+      h += `<div class="pr-cementcard"><h3>${esc(c.brand)} — ${esc(c.name)}</h3>`
+        + `<div><span class="pill cement">${esc((c.for || []).join(' / '))}</span></div>`
+        + `<dl class="pr-facts"><dt>Gap filling</dt><dd>${esc(c.gapFilling)}</dd>`
+        + `<dt>Cleaner</dt><dd>${esc(c.cleaner)}</dd>`
+        + `<dt>WRAS</dt><dd>${esc(c.wras)}</dd>`
+        + `<dt>Cure time</dt><dd>${esc(c.cure)}</dd></dl>`
+        + `<div class="note">Source: ${src(c.sources)}</div></div>`;
+    });
+    return h;
+  }
   function renderPlastics() {
     document.querySelectorAll('#pr-plSys button').forEach((b) => b.classList.toggle('on', b.dataset.sys === st.plSys));
     document.querySelectorAll('#pr-plMat button').forEach((b) => b.classList.toggle('on', b.dataset.make === st.plMat));
+    fillPlasticPickers();
     $('plCement').textContent = '⚠ ' + D.plastics.cementWarning;
-    $('plDnNote').innerHTML = (D.plastics.dnVsOd || []).map(esc).join('<br>');
-    const groups = L.plasticGroups({ system: st.plSys, make: st.plMat, ukOnly: st.ukOnly });
+    $('plDnNote').textContent = D.plastics.dnVsOd || '';
+    const htmlC = st.sizeKey ? compatHTML(st.sizeKey) : '';
+    $('plCompat').hidden = !htmlC;
+    $('plCompat').innerHTML = htmlC;
+    $('plJointBody').innerHTML = jointingHTML();
+    let groups = L.plasticGroups({ system: st.plSys, make: st.plMat, ukOnly: st.ukOnly });
+    if (st.sizeKey) {
+      const keys = new Set(L.rowsForPlasticSize(st.sizeKey, { family: 'plastic', sub: 'all' }).map((r) => r.key));
+      if (keys.size) {
+        groups = groups.map((g) => ({ ...g, sizes: g.sizes.filter((sz) => Object.values(sz.cells).some((r) => keys.has(r.key))) }))
+          .filter((g) => g.sizes.length);
+      }
+    }
     const hiddenUk = L.plasticGroups({ system: st.plSys, make: st.plMat }).reduce((n, g) => n + g.series.length, 0)
-      - groups.reduce((n, g) => n + g.series.length, 0);
+      - L.plasticGroups({ system: st.plSys, make: st.plMat, ukOnly: st.ukOnly }).reduce((n, g) => n + g.series.length, 0);
     $('plGroups').innerHTML = groups.map(groupHTML).join('')
-      + (!groups.length ? '<section class="card"><div class="empty">No plastic tables for this choice with the UK filter on.</div></section>' : '')
+      + (!groups.length ? '<section class="card"><div class="empty">No plastic tables for this choice' + (st.sizeKey ? ' at the selected size' : '') + ' with the UK filter on.</div></section>' : '')
       + (hiddenUk ? `<div class="note" style="padding:0 12px">${hiddenUk} non-UK table(s) hidden by the UK filter (US Schedule 40 PVC).</div>` : '');
     if (st.tab === 'plastics') $('ukCount').textContent = hiddenUk ? `${hiddenUk} non-UK table hidden` : '';
     const cmp = L.inchVsMetric();
+    const adList = (D.plastics.adaptors || []).filter((a) => a.material !== 'transition')
+      .map((a) => `<div class="note"><b>${esc(a.maker)} ${esc(a.name)}</b> (${esc(a.pn)}): `
+        + a.sizes.map((s) => s.metric != null ? `${s.nps} × ${s.metric} mm` : s.nps).join(', ')
+        + '. ' + esc(a.notes) + ' Source: ' + src(a.sources) + '</div>').join('');
+    const tr = (D.plastics.adaptors || []).find((a) => a.material === 'transition');
     $('plCompareBody').innerHTML = '<div class="note">' + D.plastics.interconnect.map(esc).join('<br>') + '</div>'
       + '<div class="scroll"><table class="data"><thead><tr><th class="l">Inch size</th><th>Inch OD</th><th>Nearest metric OD</th><th>Δ mm</th><th class="l">Mix?</th></tr></thead><tbody>'
       + cmp.map((c) => `<tr><td class="l">${esc(c.nps)}</td><td>${fmt(c.od)}</td><td>${fmt(c.metric)}</td><td>${c.diff > 0 ? '+' : ''}${c.diff}</td>`
-        + `<td class="l">${c.interchangeable ? '✓ same OD' : 'adaptor needed'}</td></tr>`).join('') + '</tbody></table></div>'
-      + `<div class="note">“Nearest metric” is calculated by this app from BS 3505 and EN 1452 ODs — it is not a maker’s equivalence table. Source: ${src(D.plastics.interconnectSources)}</div>`;
+        + `<td class="l">${c.interchangeable ? '✓ fittings fit (same OD)' : 'adaptor or coupling needed'}</td></tr>`).join('') + '</tbody></table></div>'
+      + `<div class="note">“Nearest metric” is calculated by this app from BS 3505 and EN 1452 ODs — it is not a maker’s equivalence table. Only 2½" / 75 mm and 5" / 140 mm are published as interchangeable.</div>`
+      + '<h3>Imperial / metric adaptor fittings</h3>' + adList
+      + (tr ? `<div class="note"><b>${esc(tr.maker)} ${esc(tr.name)}</b> (${esc(tr.pn)}): ${tr.sizes.map((s) => s.nps).join(', ')}. ${esc(tr.notes)} Source: ${src(tr.sources)}</div>` : '')
+      + `<div class="note">Source: ${src(D.plastics.interconnectSources)}</div>`;
   }
 
   /* ---------- material family filter ---------- */
@@ -726,28 +951,10 @@ const PipeUI = (() => {
 
     document.querySelectorAll('#pr-modeSeg button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.mode)));
     $('dn').addEventListener('change', () => {
-      if (st.family === 'plastic') {
-        st.sizeKey = $('dn').value;
-        const item = L.plasticSizeList({ ukOnly: st.ukOnly, family: 'plastic', sub: st.sub }).all.find((x) => x.value === st.sizeKey);
-        if (item && item.dn != null) st.dn = item.dn;
-        else if (item && item.num != null) st.dn = item.num;
-        store.set('sizeKey', st.sizeKey);
-      } else {
-        st.dn = +$('dn').value;
-      }
+      st.dn = +$('dn').value;
       st.sel = null; renderSize();
     });
     const stepDn = (dir) => {
-      if (st.family === 'plastic') {
-        const list = L.plasticSizeList({ ukOnly: st.ukOnly, family: 'plastic', sub: st.sub }).all;
-        let i = list.findIndex((x) => x.value === st.sizeKey);
-        if (i < 0) i = 0;
-        i = Math.max(0, Math.min(list.length - 1, i + dir));
-        st.sizeKey = list[i].value;
-        if (list[i].dn != null) st.dn = list[i].dn;
-        st.sel = null; renderSize();
-        return;
-      }
       const list = activeDns().length ? activeDns() : L.dnList();
       let i = list.indexOf(st.dn);
       if (i < 0) i = dir < 0 ? list.filter((d) => d < st.dn).length : Math.max(0, list.filter((d) => d <= st.dn).length - 1);
@@ -755,6 +962,27 @@ const PipeUI = (() => {
     };
     $('dnPrev').addEventListener('click', () => stepDn(-1));
     $('dnNext').addEventListener('click', () => stepDn(1));
+    $('dnMet').addEventListener('change', () => { if ($('dnMet').value) setPlasticSize($('dnMet').value); });
+    $('dnImp').addEventListener('change', () => { if ($('dnImp').value) setPlasticSize($('dnImp').value); });
+    $('dnGrp').addEventListener('change', () => { if ($('dnGrp').value) setPlasticSize($('dnGrp').value); });
+    $('metPrev').addEventListener('click', () => stepPlastic('metric', -1));
+    $('metNext').addEventListener('click', () => stepPlastic('metric', 1));
+    $('impPrev').addEventListener('click', () => stepPlastic('imperial', -1));
+    $('impNext').addEventListener('click', () => stepPlastic('imperial', 1));
+    $('grpPrev').addEventListener('click', () => stepPlastic('grp', -1));
+    $('grpNext').addEventListener('click', () => stepPlastic('grp', 1));
+    $('tabMet').addEventListener('change', () => {
+      if ($('tabMet').value) setPlasticSize($('tabMet').value);
+      else setPlasticSize($('tabImp').value || '', { allowEmpty: true });
+    });
+    $('tabImp').addEventListener('change', () => {
+      if ($('tabImp').value) setPlasticSize($('tabImp').value);
+      else setPlasticSize($('tabMet').value || '', { allowEmpty: true });
+    });
+    $('tabMetPrev').addEventListener('click', () => stepPlastic('metric', -1));
+    $('tabMetNext').addEventListener('click', () => stepPlastic('metric', 1));
+    $('tabImpPrev').addEventListener('click', () => stepPlastic('imperial', -1));
+    $('tabImpNext').addEventListener('click', () => stepPlastic('imperial', 1));
     $('showPlastic').addEventListener('change', () => { st.plastic = $('showPlastic').checked; store.set('showPlastic', st.plastic); renderSize(); });
     $('ukCommon').addEventListener('change', () => {
       st.ukOnly = $('ukCommon').checked;

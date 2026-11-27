@@ -4,7 +4,7 @@
  * CHANGED A FILE? Bump the version number so phones fetch the new copy.
  * Only touches caches named 'pipe-ref-*' so it never deletes Flange ID's.
  */
-const CACHE = 'pipe-ref-v5';
+const CACHE = 'pipe-ref-v6';
 const FILES = [
   './', './index.html', './manifest.json',
   './pipe-data.js', './pipe-logic.js', './pipe-drawing.js',
