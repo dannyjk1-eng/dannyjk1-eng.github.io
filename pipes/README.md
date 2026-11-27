@@ -24,12 +24,12 @@ It is plain HTML, JS and SVG with no build step, and it works offline once opene
 - **Browse**: search all rows (e.g. `SDR11`, `C40`, `114.3`), filter by material and by service (e.g. drinking water, good
   only), plus a materials × services grid.
 
-## Plastic labels, metric / imperial pickers, jointing and compatibility (v6)
+## Plastic labels, metric / imperial pickers and jointing (v7)
 Metric plastic is sold by outside diameter: a 25 mm pipe is 25.0 mm OD. Steel DN25 is 33.7 mm OD.
 Plastic labels, pickers, the Plastics tab and search results never show an “≈ DNxx” conversion. Typing **25**, **d25** or **25 mm** finds the 25 mm OD pipe. Under **All**, metals stay grouped by steel DN; a 32 mm plastic listed with DN25 is still labelled **32 mm (OD 32.0)**.
 
 - Under **Plastics** (By size and the Plastics tab) there are two phone-friendly drop-downs: **Metric (OD, mm)** and **Imperial (nominal inch)**. Waste and soil sizes are labelled with their real OD (e.g. 32 mm waste (OD 36.1)).
-- **Metric / imperial fit:** only 2½" / 75 mm and 5" / 140 mm have compatible ODs (Durapipe; GF). Other sizes need a purpose-made adaptor or a wide-range coupling. Sourced adaptor ranges: Durapipe PVC-U imperial/metric sockets ½"×20 to 4"×110 (PN15, including 2½"×75); SuperFLO ABS ½"×20 to 6"×160 (PN10, no 2½" or 5" — those already interchange). Do not mix metric and imperial flanges or backing rings. PVC and ABS cements are not interchangeable across a transition; Georg Fischer lists an ABS/PVC-U adaptor union in inch sizes ½"–2" PN15.
+- A single short line near the metric / imperial pickers (By size and the Plastics tab): *Metric and imperial plastic ODs only match at 2½" / 75 mm and 5" / 140 mm; other sizes need an adaptor fitting.* (Durapipe PVC-U and SuperFLO ABS guides; GF PVC-U). There is no compatibility table, per-size counterpart panel or adaptor-product list — those cluttered the app because only two sizes interchange. Do not mix metric and imperial flanges or backing rings. PVC and ABS cements are not interchangeable across a transition; the jointing section still notes the Georg Fischer ABS/PVC-U adaptor union in inch sizes ½"–2" PN15.
 - **Jointing** (Plastics tab): a matrix of PVC-U, PVC-C, ABS, PE, PP and soil/waste against solvent-weld, ring-seal / push-fit, butt fusion, electrofusion, socket fusion, mechanical couplings, flanged stub + backing ring, and threaded (heavy wall only). Sourced cements include Durapipe PVC-U one-step and HCR-36, Tangit PVC-U / PVC-C / ABS, Griffon UNI-100 XT and FloPlast SC125/SC250, with WRAS status and cure times where published. PE and PP cannot be solvent welded.
 - Sources: ISO 161-1:2018, ISO 1452-1:2009, ISO 1452-2:2009 Tables 2–3, ISO 6708:1995, Durapipe PVC-U and SuperFLO ABS specification guides, GF ABS/PVC-U union data sheet, Henkel Tangit TDS, WRAS directory section 5560 (read 27 Nov 2026).
 
@@ -59,7 +59,7 @@ The [Plastic Pipe Shop PVC table](https://www.plasticpipeshop.co.uk/PVC-Pipe-Mea
   - Asbestos cement, clay and concrete are neither, so they only show under **All**.
 - **Plastics tab** (hidden under Metals): metric / imperial switch and PVC / ABS switch. One card per system with uses, joining, cement, temperature,
   WRAS, and a phone-width table of OD, minimum wall and nominal ID per class. Includes a warning that PVC-U and ABS use **different solvent cements**
-  and an inch-vs-metric table (only 2½"/75 mm and 5"/140 mm interchange).
+  and the short mix note (only 2½"/75 mm and 5"/140 mm interchange).
   - PVC-U: EN 1452 metric (PN10/PN16, now from 20 mm), BS 3505 / 3506 imperial Classes B, C, D, E, 7 (all sizes ½"–12"), ASTM D1785 Sch 40 / 80, EN 1401 sewer, EN 1329 soil 82/110/160.
   - ABS: BS 5391 imperial Classes C, D, E, T; ISO 15493 metric PN10 (and PN8 315 mm); EN 1455 waste 32/40/50 (OD 36/43/56!).
 
@@ -70,7 +70,7 @@ The [Plastic Pipe Shop PVC table](https://www.plasticpipeshop.co.uk/PVC-Pipe-Mea
 | `pipe-logic.js` | Flattening rows, DN logic, filters, coupling matching and two-pipe logic. Global `PipeLogic`. |
 | `pipe-drawing.js` | Cross-section and two-pipe SVGs. Global `PipeDrawing`. |
 | `index.html` | Screen code. CSS scoped to `.pr-app`, ids `pr-*`, one global `PipeUI`, storage keys `pipeRef.*`. |
-| `sw.js` / `manifest.json` / `icons/` | PWA. The cache is `pipe-ref-v6`, and it only touches `pipe-ref-*` caches and its own files. |
+| `sw.js` / `manifest.json` / `icons/` | PWA. The cache is `pipe-ref-v7`, and it only touches `pipe-ref-*` caches and its own files. |
 | `tests.js` | `node tests.js`: data sanity, spot checks, coupling and two-pipe logic, namespacing. |
 | `build-standalone.js` | `node build-standalone.js` writes `pipe-reference-standalone.html`. |
 

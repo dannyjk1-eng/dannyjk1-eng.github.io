@@ -388,75 +388,6 @@ const PipeLogic = (() => {
     return out;
   }
 
-  /** Imperial PVC (BS 3505) vs the nearest metric EN 1452 OD — calculated by the app, not a maker's equivalence table. */
-  function inchVsMetric() {
-    const metricODs = [...new Set(ROWS.filter((r) => r.seriesId.startsWith('EN1452_')).map((r) => r.od))].filter((o) => o >= 20).sort((a, b) => a - b);
-    const seen = new Set(), out = [];
-    for (const r of ROWS.filter((x) => x.seriesId.startsWith('BS3505_'))) {
-      if (seen.has(r.nps)) continue; seen.add(r.nps);
-      const near = metricODs.reduce((b, o) => (Math.abs(o - r.od) < Math.abs(b - r.od) ? o : b), metricODs[0]);
-      out.push({ nps: r.nps, od: r.od, metric: near, diff: round(r.od - near, 1), interchangeable: r.nps === '2 1/2"' || r.nps === '5"' });
-    }
-    return out;
-  }
-
-  /**
-   * Metric / imperial compatibility for a plastic picker value
-   * ('d:25', 'nps:2 1/2"', 'nom:32'). Returns counterpart, OD difference,
-   * whether fittings interchange, sourced adaptors, and wide-range couplings
-   * whose single published range covers both ODs.
-   */
-  function compatForSize(sizeKey, opts = {}) {
-    const lists = plasticSizeList({ ukOnly: opts.ukOnly, family: opts.family || 'plastic', sub: opts.sub });
-    const item = lists.all.find((s) => s.value === String(sizeKey));
-    if (!item) return null;
-    const table = inchVsMetric();
-    let counterpart = null, interchangeable = false, pairDiff = null;
-    if (item.kind === 'nps') {
-      const row = table.find((c) => c.nps === item.nps);
-      if (row) {
-        counterpart = { value: 'd:' + row.metric, kind: 'd', nps: null, od: row.metric,
-          label: `${row.metric} mm (OD ${odTxt(row.metric)})`, diff: row.diff };
-        interchangeable = !!row.interchangeable;
-        pairDiff = row.diff;
-      }
-    } else if (item.kind === 'd' || item.kind === 'nom') {
-      const od = item.od;
-      const hit = table.find((c) => c.interchangeable && Math.abs(c.od - od) <= 0.25)
-        || table.find((c) => c.metric === od)
-        || table.reduce((b, c) => (!b || Math.abs(c.metric - od) < Math.abs(b.metric - od) ? c : b), null);
-      // Prefer a commercial adaptor pairing when the selected metric OD is an adaptor size.
-      const adMetric = (D.plastics.adaptors || []).flatMap((a) => a.sizes).find((s) => s.metric === od);
-      const byAdaptor = adMetric ? table.find((c) => c.nps === adMetric.nps) : null;
-      const row = (item.kind === 'd' && byAdaptor) ? byAdaptor : hit;
-      if (row) {
-        counterpart = { value: 'nps:' + row.nps, kind: 'nps', nps: row.nps, od: row.od,
-          label: `${row.nps} (OD ${odTxt(row.od)})`, diff: round(od - row.od, 1) };
-        interchangeable = !!row.interchangeable;
-        pairDiff = counterpart.diff;
-      }
-    }
-    const adaptors = (D.plastics.adaptors || []).map((a) => {
-      const sizes = a.sizes.filter((s) => {
-        if (item.kind === 'nps') return s.nps === item.nps;
-        if (s.metric == null) return false;
-        return s.metric === item.od || (counterpart && s.nps === counterpart.nps);
-      });
-      return sizes.length ? { adaptor: a, sizes } : null;
-    }).filter(Boolean);
-    // GF ABS/PVC union matches imperial inch sizes (same-size transition, not metric).
-    const transitions = (D.plastics.adaptors || []).filter((a) => a.material === 'transition').map((a) => {
-      const sizes = a.sizes.filter((s) => s.nps && (item.nps === s.nps || (counterpart && counterpart.nps === s.nps)));
-      return sizes.length ? { adaptor: a, sizes } : null;
-    }).filter(Boolean);
-    let couplings = [];
-    if (counterpart && item.od != null) {
-      couplings = twoPipe(item.od, 'pvc', counterpart.od, 'pvc').sameRange;
-    }
-    return { item, counterpart, interchangeable, pairDiff, adaptors, transitions, couplings,
-      notes: D.plastics.interconnect, sources: D.plastics.interconnectSources };
-  }
-
   /** Coverage summary for the README / report. */
   function coverage() {
     const byMat = {};
@@ -469,9 +400,9 @@ const PipeLogic = (() => {
 
   return { data: D, MAT, SERIES, ROWS, similarDN, liningFor, dnList, rowsForDN, suit, filterRows,
     matchCouplings, twoPipe, coverage, round, UK_COMMON_DEFAULT, ukCommonGet, ukCommonSet, hiddenNonUk,
-    FAMILY_DEFAULT, inFamily, materialsInFamily, couplingInFamily, familyGet, familySet, hiddenByFamily, plasticGroups, inchVsMetric,
+    FAMILY_DEFAULT, inFamily, materialsInFamily, couplingInFamily, familyGet, familySet, hiddenByFamily, plasticGroups,
     ISO161_DN, parseSizeQuery, isOdPlastic, sizeName, sizeKeyForRow, plasticSizeList, rowsForPlasticSize,
-    odTxt, compatForSize };
+    odTxt };
 })();
 
 if (typeof module !== 'undefined') module.exports = { PipeLogic };
