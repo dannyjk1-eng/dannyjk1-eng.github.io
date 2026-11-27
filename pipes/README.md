@@ -22,6 +22,40 @@ It is plain HTML, JS and SVG with no build step, and it works offline once opene
 - **Browse**: search all rows (e.g. `SDR11`, `C40`, `114.3`), filter by material and by service (e.g. drinking water, good
   only), plus a materials × services grid.
 
+## Material family filter and Plastics tab (v4)
+- **Working on… All / Plastics / Metals** (second bar, under *Common in UK*), remembered as `pipeRef.family` and `pipeRef.familySub`.
+  It combines with the UK toggle and applies to **By size** (rows and the DN list), **Couplings** (material lists, and products that list no
+  pipe of that family are hidden — e.g. PE-only AVK 621 / 623 and AquaFast under Metals), **Browse** and the materials grid.
+  - **Plastics** = PE, PVC-U (pressure, sewer, soil), ABS (pressure, waste) and GRP (glass-reinforced *thermoset* plastic). Chips: PVC · ABS · PE · GRP.
+  - **Metals** = carbon steel, stainless, ductile iron (water + sewer) and cast iron. Chips: Steel · **Galvanised** · Stainless · Iron.
+    Galvanised is a finish: it selects the EN 10255 tube series (supplied black or hot-dip galvanised, same sizes) and adds a galvanised note
+    (EN 10240 zinc ≥ 400 g/m², not above 60 °C, not with copper alloys, thread only, WRAS is per product). No copper data yet.
+  - Asbestos cement, clay and concrete are neither, so they only show under **All**.
+- **Plastics tab** (hidden under Metals): metric / imperial switch and PVC / ABS switch. One card per system with uses, joining, cement, temperature,
+  WRAS, and a phone-width table of OD, minimum wall and nominal ID per class. Includes a warning that PVC-U and ABS use **different solvent cements**
+  and an inch-vs-metric table (only 2½"/75 mm and 5"/140 mm interchange).
+  - PVC-U: EN 1452 metric (PN10/PN16, now from 20 mm), BS 3505 / 3506 imperial Classes B, C, D, E, 7 (all sizes ½"–12"), ASTM D1785 Sch 40 / 80, EN 1401 sewer, EN 1329 soil 82/110/160.
+  - ABS: BS 5391 imperial Classes C, D, E, T; ISO 15493 metric PN10 (and PN8 315 mm); EN 1455 waste 32/40/50 (OD 36/43/56!).
+
+### Plastics cross-check against a retailer table (27 Nov 2026)
+The Plastic Pipe Shop table was used as a SECONDARY check only. Primary sources: Durapipe PVC-U and SuperFLO ABS specification guides, BS 3505 tables
+(National Plastic, Zenith), EN 1452 (Engineering ToolBox), Wavin and FloPlast data sheets, Harvel / GF for ASTM. Differences:
+| Item | Retailer | App (primary) |
+|---|---|---|
+| BS 3505 Class E 2½" wall | 5.6 | 4.8 |
+| BS 3505 Class C 2½" wall | 3.6 | 3.0 |
+| BS 3505 Class E 6" wall | 12.1 | 10.8 min (Durapipe nominal 11.7) |
+| BS 3505 Class E 8" wall | 14.1 | 12.6 min |
+| "Class C" ½"–1" (1.7 / 1.9 / 2.2) and 1½" (2.5) | listed as Class C | no Class C below 2"; these are Class E (½"–1") and Class D (1½") |
+| "Class C" 1¼" 2.2 | Class C | Class D |
+| EN 1452 32 mm 10 bar wall | 1.8 | 1.6 |
+| EN 1452 20 mm / 25 mm 10 bar wall | 1.0 / 1.25 | EN 1452 lists no PN10 for 20 / 25 mm (PN16: 1.5 / 1.9) |
+| EN 1452 16 mm 10 bar | 1.5 | EN 1452 lists 16 mm only at PN20 (1.5) — not included |
+| Class 7 ¾" ID | 14.1 | 18.8 (retailer typo; wall 3.9 matches) |
+| 1" OD 33.4, 8" OD 219.1 | | within the BS 3505 mean-OD bands (33.4–33.7, 218.8–219.4), not an error |
+| Sch 40 IDs (1½" 40.9, 2" 52.5) | | same as OD − 2 × min wall; Harvel's average IDs are 40.4 / 52.0 |
+All other retailer figures agree.
+
 ## Files
 | File | What |
 |---|---|
@@ -29,7 +63,7 @@ It is plain HTML, JS and SVG with no build step, and it works offline once opene
 | `pipe-logic.js` | Flattening rows, DN logic, filters, coupling matching and two-pipe logic. Global `PipeLogic`. |
 | `pipe-drawing.js` | Cross-section and two-pipe SVGs. Global `PipeDrawing`. |
 | `index.html` | Screen code. CSS scoped to `.pr-app`, ids `pr-*`, one global `PipeUI`, storage keys `pipeRef.*`. |
-| `sw.js` / `manifest.json` / `icons/` | PWA. The cache is `pipe-ref-v1`, and it only touches `pipe-ref-*` caches and its own files. |
+| `sw.js` / `manifest.json` / `icons/` | PWA. The cache is `pipe-ref-v4`, and it only touches `pipe-ref-*` caches and its own files. |
 | `tests.js` | `node tests.js`: data sanity, spot checks, coupling and two-pipe logic, namespacing. |
 | `build-standalone.js` | `node build-standalone.js` writes `pipe-reference-standalone.html`. |
 
@@ -38,8 +72,8 @@ It is plain HTML, JS and SVG with no build step, and it works offline once opene
 ## Data rules
 - Values were copied from the cited standard extracts and maker datasheets or pages (read 26 Nov 2026). Nothing is interpolated.
 - `unverified` rows show **⚠** with a reason. These cover a doubtful scan, sources that disagree, or a derived wall.
-- Where no reliable wall exists, the row is OD only (wall `null`, ID “—”). This applies to EN 10220, GRP, imperial CI/AC,
-  metric AC and BS 3505.
+- Where no reliable wall exists, the row is OD only (wall `null`, ID “—”). This applies to EN 10220, GRP, imperial CI/AC
+  and metric AC (BS 3505 now has walls).
 - Concrete has no dimension rows, because ODs vary by maker.
 - Suitability ratings are **general guidance**. They are not approvals. Always check the maker's data and the WRAS / Reg 31 listing.
 - Coupling ranges come from VJ datasheets, AVK UK product pages, and the Straub / Teekay datasheets (parsed from the PDFs).
