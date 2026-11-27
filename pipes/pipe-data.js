@@ -26,8 +26,12 @@
  *     od    outside diameter, mm
  *     wall  wall thickness, mm (null = the standard does not fix one)
  *   wallBasis  'nominal' | 'minimum' | 'derived'  — what the wall means
+ *   wallMax  optional map, same keys as unverified: the standard’s maximum wall
+ *   wallNom  optional map: a manufacturer’s published product / mean wall
  *   unverified { key: why }  key = dn (or od for OD-sized series). These
  *           rows get a ⚠ in the app. Never guess: null + a note instead.
+ *           Do not ⚠ a minimum just because a retailer quotes a thicker
+ *           wall that sits inside the standard min–max band.
  *
  * ID (bore) is never stored: the app calculates OD − 2 × wall and labels
  * it "nominal". Linings (e.g. cement mortar) make the real bore smaller.
@@ -130,8 +134,18 @@ const PIPE_DATA = (() => {
       url: 'https://woe.kendallgroup.com/woeb/pdwimages/jogattachments/Harvel_PVC_80_Pipe.pdf' },
     gfPvc2012: { title: 'Georg Fischer PVC-U technical information 2012 (BS inch, metric and ASTM Sch 80 in mm; inch vs metric note)',
       url: 'https://www.hccl.ie/uploads/1/4/7/3/1473854/2012_pvc_catalog__n_1_.pdf' },
-    plasticpipeshop: { title: 'The Plastic Pipe Shop — PVC pipe measurements OD, ID, wall (retailer table; used as a SECONDARY cross-check only)',
+    plasticpipeshop: { title: 'The Plastic Pipe Shop — PVC pipe measurements OD, ID, wall (retailer table, re-read 27 Nov 2026; SECONDARY only). The page warns that, due to supplier shortages, walls may not match the table.',
       url: 'https://www.plasticpipeshop.co.uk/PVC-Pipe-Measurements-OD-ID-Wall_ep_53-1.html' },
+    iso1452pipes: { title: 'ISO 1452-2:2009 — PVC-U pipes: Table 2 nominal (minimum) walls and Table 3 one-sided wall tolerance (+x / 0), e_max = e_n + x',
+      url: 'https://cdn.standards.iteh.ai/samples/50362/2acb8dac5016465698c0ce99b8049311/ISO-1452-2-2009.pdf' },
+    wrasCements: { title: 'WRAS Approvals Directory, section 5560 Solvent Cements (Tangit PVC-U Plus 2202517, Tangit PVC-U Special Adhesive 2209535, Tangit ABS 2212513, Durapipe FIP & Astore PVCu Clear 2212568, Griffon UNI-100 XT 2311523) — read 27 Nov 2026',
+      url: 'https://www.wrasapprovals.co.uk/approvals-directory/?section=5560' },
+    tangitPvcU: { title: 'Henkel Tangit PVC-U technical data sheet (gap-filling, thixotropic, EN 14814 / EN 14680, open time 4 min at 20 °C)',
+      url: 'https://datasheets.tdx.henkel.com/TANGIT-PVC-U-en_GL.pdf' },
+    tangitPvcC: { title: 'Henkel Tangit PVC-C Special Adhesive technical data sheet (PVC-C pressure systems, gap filling up to +0.6 mm, EN 14814, Tangit Cleaner PVC-U/C/ABS)',
+      url: 'https://datasheets.tdx.henkel.com/TANGIT-PVC-C-en_GL.pdf' },
+    gfAbsPvcUnion: { title: 'Georg Fischer adaptor union ABS/PVC-U Inch BS (ABS solvent socket + PVC-U solvent socket, EPDM O-ring, ½"–2" PN15) — data sheet valid from 2 Apr 2026',
+      url: 'https://assets.georgfischer.com/is/content/georgfischerag/8LpDDPpdBpdf?filename=gfps-datasheet-Adaptor+union+ABS%2FPVC-U++Inch+BS-106340' },
     iso161: { title: 'ISO 161-1:2018 Thermoplastics pipes — Nominal outside diameters and nominal pressures — Part 1: Metric series (dn equals the minimum mean OD)',
       url: 'https://cdn.standards.iteh.ai/samples/65253/e6de084cc2624dca8945373461aff650/ISO-161-1-2018.pdf' },
     iso6708: { title: 'ISO 6708:1995 / EN ISO 6708 Pipework components — Definition and selection of DN (the number after DN is not a measurable value)',
@@ -571,6 +585,25 @@ const PIPE_DATA = (() => {
   const peDnEquiv = { 20: 15, 25: 20, 32: 25, 50: 40, 63: 50, 90: 80, 125: 100, 180: 150, 250: 200, 315: 250, 355: 300,
     450: 350, 500: 400, 560: 450, 630: 500, 710: 600, 800: 700 };
 
+  // ISO 1452-2:2009 Table 3 — one-sided tolerance x on the nominal (minimum)
+  // wall e_n (grade W of ISO 11922-1). Bands are e_n > lo up to hi inclusive.
+  // e_max = e_n + x. Used only for EN 1452 / ISO 1452 metric PVC-U.
+  function iso1452WallMax(en) {
+    if (en == null || !(en > 1.0)) return null;
+    const x = en <= 2 ? 0.4 : en <= 3 ? 0.5 : en <= 4 ? 0.6 : en <= 5 ? 0.7
+      : en <= 6 ? 0.8 : en <= 7 ? 0.9 : en <= 8 ? 1.0 : en <= 9 ? 1.1
+      : en <= 10 ? 1.2 : en <= 11 ? 1.3 : en <= 12 ? 1.4 : en <= 13 ? 1.5
+      : en <= 14 ? 1.6 : en <= 15 ? 1.7 : en <= 16 ? 1.8 : en <= 17 ? 1.9
+      : en <= 18 ? 2.0 : en <= 19 ? 2.1 : en <= 20 ? 2.2 : en <= 21 ? 2.3
+      : en <= 22 ? 2.4 : en <= 23 ? 2.5 : en <= 24 ? 2.6 : en <= 25 ? 2.7
+      : en <= 26 ? 2.8 : en <= 27 ? 2.9 : en <= 28 ? 3.0 : en <= 29 ? 3.1
+      : en <= 30 ? 3.2 : en <= 31 ? 3.3 : en <= 32 ? 3.4 : en <= 33 ? 3.5
+      : en <= 34 ? 3.6 : en <= 35 ? 3.7 : en <= 36 ? 3.8 : en <= 37 ? 3.9
+      : en <= 38 ? 4.0 : null;
+    return x == null ? null : Math.round((en + x) * 10) / 10;
+  }
+  const wallMaxMap = (rows) => Object.fromEntries(rows.map(([od, w]) => [od, iso1452WallMax(w)]).filter((x) => x[1] != null));
+
   // ----- PVC-U EN 1452 pressure (rows: OD, wall). Minimum walls.
   // dn 63–90: design coefficient 2.5 → PN10 = SDR21, PN16 = SDR13.6
   // dn ≥110:  design coefficient 2.0 → PN10 = SDR26, PN16 = SDR17
@@ -579,15 +612,17 @@ const PIPE_DATA = (() => {
   const pvc16 = [[20, 1.5], [25, 1.9], [32, 2.4], [40, 3.0], [50, 3.7], [63, 4.7], [75, 5.6], [90, 6.7], [110, 6.6], [125, 7.4], [140, 8.3], [160, 9.5], [180, 10.7], [200, 11.9],
     [225, 13.4], [250, 14.8], [280, 16.6], [315, 18.7], [355, 21.1], [400, 23.7], [450, 26.7], [500, 29.7]];
   series.push({ id: 'EN1452_PN10', material: 'pvc', standard: 'EN 1452-2', cls: 'PN10', label: 'PN10',
-    columns: ['od', 'wall'], wallBasis: 'minimum', rows: pvc10,
-    unverified: { 400: 'Source shows "45.3" (typo); 15.3 mm used — the same SDR26 value appears in the EN 12201 table.',
-      32: 'Retailer table (plasticpipeshop.co.uk) shows 1.8 mm for 32 mm at 10 bar; EN 1452 (Engineering ToolBox) and Durapipe both give 1.6 mm min — 1.6 used. The retailer also shows 20 mm 1.0 and 25 mm 1.25 mm at 10 bar, which EN 1452 does not list.' },
-    notes: ['20–90 mm = SDR21 (design coefficient 2.5); 110 mm and up = SDR26. EN 1452 lists no PN10 wall for 20 and 25 mm.',
-      'Durapipe’s own ID table gives 28.8 (32), 36.2 (40), 45.2 (50), 57.0 (63) … 101.6 (110) mm for PN10 — the same as OD − 2 × min wall.'], sources: ['en1452', 'durapipePvc'] });
+    columns: ['od', 'wall'], wallBasis: 'minimum', rows: pvc10, wallMax: wallMaxMap(pvc10),
+    unverified: { 400: 'Source shows "45.3" (typo); 15.3 mm used — the same SDR26 value appears in the EN 12201 table.' },
+    notes: ['20–90 mm = SDR21 (design coefficient 2.5); 110 mm and up = SDR26. EN 1452 / ISO 1452-2 Table 2 lists no PN10 wall for 16, 20 or 25 mm (16 mm is PN20 only; 20 / 25 mm start at PN16).',
+      'Wall is the standard minimum. ISO 1452-2 Table 3 gives a one-sided plus tolerance (e.g. 32 mm PN10: 1.6 min, 2.0 max). A retailer table shows 1.8 mm for 32 mm at 10 bar — that sits inside the 1.6–2.0 band, so it is treated as a mid-range / typical figure, not a replacement for the 1.6 mm minimum. The same retailer table lists 16 mm / 20 mm / 25 mm at 10 bar (1.5 / 1.0 / 1.25 mm), which the standard does not — those rows are not included.',
+      'Durapipe’s own ID table gives 28.8 (32), 36.2 (40), 45.2 (50), 57.0 (63) … 101.6 (110) mm for PN10 — the same as OD − 2 × min wall.'],
+    sources: ['en1452', 'durapipePvc', 'iso1452pipes'] });
   series.push({ id: 'EN1452_PN16', material: 'pvc', standard: 'EN 1452-2', cls: 'PN16', label: 'PN16',
-    columns: ['od', 'wall'], wallBasis: 'minimum', rows: pvc16,
-    notes: ['20–90 mm = SDR13.6 (design coefficient 2.5); 110 mm and up = SDR17.',
-      'Durapipe PVC-U pipe: PN16 20–225 mm; PN10 160–315 mm (Durapipe range statement).'], sources: ['en1452', 'durapipePvc'] });
+    columns: ['od', 'wall'], wallBasis: 'minimum', rows: pvc16, wallMax: wallMaxMap(pvc16),
+    notes: ['20–90 mm = SDR13.6 (design coefficient 2.5); 110 mm and up = SDR17. Wall is the standard minimum; max = min + ISO 1452-2 Table 3 tolerance.',
+      'Durapipe PVC-U pipe: PN16 20–225 mm; PN10 160–315 mm (Durapipe range statement).'],
+    sources: ['en1452', 'durapipePvc', 'iso1452pipes'] });
 
   // ----- PVC-U imperial, BS 3505 (classes C, D, E — cold water) and BS 3506 (classes B and 7 — industrial).
   // Walls are the standard's MINIMUM walls (Durapipe comparison table; the same numbers appear in the National Plastic and
@@ -603,27 +638,48 @@ const PIPE_DATA = (() => {
     [250, '10"', 272.6, 6.6, 9.7, 12.8, 15.7, null], [300, '12"', 323.4, 7.8, 11.5, 15.2, 18.7, null],
   ];
   const bsBand = 'BS 3505 mean-OD limits (mm): ½" 21.2–21.5 · ¾" 26.6–26.9 · 1" 33.4–33.7 · 1¼" 42.1–42.4 · 1½" 48.1–48.4 · 2" 60.2–60.5 · 2½" 75.0–75.3 · 3" 88.7–89.1 · 4" 114.1–114.5 · 5" 140.0–140.4 · 6" 168.0–168.5 · 8" 218.8–219.4 · 10" 272.6–273.4 · 12" 323.4–324.3.';
-  // Rows where the retailer table (plasticpipeshop.co.uk, secondary source) shows a different figure. The standard-based value
-  // (Durapipe = National Plastic = Zenith) is used; both values are shown.
+  // Standard maximum walls (National Plastic and Zenith BS 3505 / 3506 tables, which agree). Keyed by DN.
+  const bsMax = {
+    B: { 80: 3.4, 100: 4.0, 125: 4.4, 150: 5.2, 200: 6.1, 250: 7.6, 300: 9.0 },
+    C: { 50: 3.0, 65: 3.5, 80: 4.1, 100: 5.2, 125: 6.4, 150: 7.6, 200: 9.0, 250: 11.2, 300: 13.3 },
+    D: { 32: 2.7, 40: 3.0, 50: 3.7, 65: 4.5, 80: 5.3, 100: 6.9, 125: 8.4, 150: 10.2, 200: 11.9, 250: 14.8, 300: 17.5 },
+    E: { 15: 2.1, 20: 2.5, 25: 2.7, 32: 3.2, 40: 3.7, 50: 4.5, 65: 5.5, 80: 6.6, 100: 8.4, 125: 10.4, 150: 12.5, 200: 14.5, 250: 18.1, 300: 21.6 },
+    7: { 15: 4.3, 20: 4.5, 25: 5.2, 32: 5.5, 40: 5.9, 50: 6.3 },
+  };
+  // Durapipe published product walls (t in the imperial pipe tables, Optima and standard). Between min and max.
+  // Durapipe does not list 2½" Class E, or 8"/10"/12" Class E (Class E pipe is ½"–6" except 2½" and 5").
+  const bsNom = {
+    C: { 50: 2.8, 80: 3.8, 100: 4.9, 125: 5.9, 150: 7.1, 200: 8.4, 250: 9.7, 300: 11.5 },
+    D: { 32: 2.5, 40: 2.8, 50: 3.4, 80: 5.0, 100: 6.5, 125: 7.3, 150: 9.5, 200: 11.1 },
+    E: { 15: 1.9, 20: 2.2, 25: 2.5, 32: 3.0, 40: 3.4, 50: 4.2, 80: 6.2, 100: 7.9, 150: 11.7 },
+    7: { 15: 4.0, 20: 4.2, 25: 4.8, 32: 5.2, 40: 5.5, 50: 5.9 },
+  };
+  // Retailer table (plasticpipeshop.co.uk, secondary). Official min is always used. ⚠ only where the
+  // retailer figure is not a published max or a manufacturer nominal (it sits outside the standard band,
+  // or is a typo / mislabel).
   const ret = 'Retailer table (plasticpipeshop.co.uk) shows ';
   const bsFlags = {
-    C: { 65: ret + '3.6 mm for 2½" "Class C"; BS 3505 / Durapipe / National Plastic / Zenith all give 3.0 mm min — 3.0 used.' },
+    C: { 65: ret + '3.6 mm for 2½" Class C; the standard is 3.0 mm min / 3.5 mm max (National Plastic / Zenith). 3.6 is 0.1 mm above the standard maximum, so it is not used as a max wall — 3.0 min / 3.5 max shown.' },
     D: {},
-    E: { 65: ret + '5.6 mm for 2½" Class E; BS 3505 / Durapipe / National Plastic / Zenith all give 4.8 mm min — 4.8 used.',
-      150: ret + '12.1 mm for 6" Class E; the standard tables give 10.8 mm min (Durapipe product nominal wall 11.7 mm) — 10.8 used.',
-      200: ret + '14.1 mm for 8" Class E; the standard tables give 12.6 mm min — 12.6 used.' },
+    E: { 65: ret + '5.6 mm for 2½" Class E; the standard is 4.8 mm min / 5.5 mm max (National Plastic / Zenith). Durapipe does not list 2½" Class E in its product table. 5.6 is 0.1 mm above the standard maximum, so it is not used as a max wall — 4.8 min / 5.5 max shown.' },
   };
   const bsPress = { B: '6 bar', C: '9 bar', D: '12 bar', E: '15 bar', 7: 'for threading (12 bar after threading, Durapipe)' };
   [['B', 3, 'BS3506', 'BS 3506 (industrial PVC-U)'], ['C', 4, 'BS3505', 'BS 3505 (imperial PVC-U)'], ['D', 5, 'BS3505', 'BS 3505 (imperial PVC-U)'],
    ['E', 6, 'BS3505', 'BS 3505 (imperial PVC-U)'], ['7', 7, 'BS3506', 'BS 3506 (imperial PVC-U)']].forEach(([cls, i, pre, std]) => {
     const rows = bs3505.filter((r) => r[i] != null).map((r) => [r[0], r[1], r[2], r[i]]);
+    const extraNotes = {
+      C: 'No Class C exists below 2" (and no Class D below 1¼"). A retailer table lists "Class C" walls of 1.7 / 1.9 / 2.2 / 2.2 / 2.5 mm for ½"–1½" — those walls are really Class E (½"–1") and Class D (1¼"–1½"). Those sizes are not added as Class C.',
+      E: 'A retailer table shows 12.1 mm for 6" Class E and 14.1 mm for 8" Class E. Those sit inside the standard bands (6": 10.8–12.5, Durapipe product wall 11.7; 8": 12.6–14.5, no Durapipe Class E 8" product listed) — they are not used in place of the minimum.',
+      7: 'A retailer table lists the ¾" Class 7 ID as 14.1 mm with a 3.9 mm wall. That ID is a typo: 26.7 − 2 × 3.9 = 18.9 mm. The wall itself matches the standard minimum.',
+    };
     series.push({ id: pre + '_' + cls, material: 'pvc', standard: std, cls: 'Class ' + cls, label: `Class ${cls} (${bsPress[cls]}) — imperial`,
       columns: ['dn', 'nps', 'od', 'wall'], wallBasis: 'minimum', rows,
+      wallMax: bsMax[cls] || {}, wallNom: bsNom[cls] || {},
       unverified: bsFlags[cls] || {},
-      notes: [bsBand, cls === 'C' ? 'No Class C exists below 2" (and no Class D below 1¼"). A retailer table lists "Class C" walls of 1.7–2.5 mm for ½"–1½" — those are really Class E / D walls.' : null,
-        'Walls are the standard’s minimums (Durapipe product walls are a little thicker: e.g. Class E 4" 7.9 mm nominal vs 7.3 mm min).',
+      notes: [bsBand, extraNotes[cls] || null,
+        'Walls in the table are the standard’s minimums. Max walls are from the National Plastic / Zenith BS 3505 / 3506 tables (which agree). Where shown, “nom” is Durapipe’s published product wall t (always between min and max).',
         cls === 'B' ? 'Class B and Class 7 are BS 3506 (industrial); Class B pressure 6 bar is from the Zenith table, not Durapipe.' : 'Rated at 20 °C; reduce the working pressure as temperature rises.'].filter(Boolean),
-      sources: ['durapipePvc', 'bs3505np', 'bs3505zen'].concat(cls === 'B' ? [] : []) });
+      sources: ['durapipePvc', 'bs3505np', 'bs3505zen'] });
   });
 
   // ----- PVC-U / PVC ASTM D1785 Schedule 40 and 80 (inch IPS). Harvel inch tables converted at × 25.4 mm
@@ -1061,18 +1117,186 @@ const PIPE_DATA = (() => {
   const CEMENT = 'PVC-U and ABS use DIFFERENT solvent cements — they are not interchangeable. Durapipe: its ABS cement (with Eco-cleaner) must be used on ABS, its PVC-U one-step cement (or HCR-36 for strong chemicals) on PVC-U, and brushes must not be shared between cements.';
   const plastics = {
     cementWarning: CEMENT,
-    dnVsOd: [
-      'Metric thermoplastic pipe (PVC-U, ABS, PE) is designated by its nominal outside diameter dn (ISO 161-1 and ISO 1452-1). A “25 mm” or “d25” pipe has a 25.0 mm OD — that is not steel DN25.',
-      'DN (ISO 6708) is a dimensionless size used for steel, flanges and valves. “The number following the letters DN does not represent a measurable value.” Steel DN25 is 33.7 mm OD (1").',
-      'Valve and fitting makers therefore list both numbers: d25 (25 mm OD pipe) = DN20; d32 (32 mm OD pipe) = DN25. Durapipe: “the imperial system refers to the nominal bore size; the metric system relates to the outside diameter.”',
-      'EN 1401 and EN 1329 drainage is designated DN/OD, so DN110 means 110 mm outside diameter (not steel DN100).'
+    dnVsOd: 'Metric plastic is sold by outside diameter: a 25 mm pipe is 25.0 mm OD. Steel DN25 is 33.7 mm OD.',
+    dnVsOdSources: ['iso161', 'iso6708', 'iso1452def', 'durapipePvc'],
+    interconnect: [
+      'Imperial (inch) pipe is named by nominal bore and metric pipe by OD. The ODs are slightly different, so a metric fitting will not push onto imperial pipe, or the other way around, except two sizes.',
+      'Only 2½" / 75 mm and 5" / 140 mm are dimensionally interchangeable (Durapipe ABS and PVC-U; GF PVC-U). 2½" is 75.2 mm OD vs 75.0 mm metric; 5" PVC is 140.0 mm (ABS 140.2 mm) vs 140.0 mm metric.',
+      'For every other size, use a purpose-made imperial/metric socket adaptor (Durapipe PVC-U and SuperFLO ABS ranges below), or join with flanges — but do not interchange metric and imperial flanges and backing rings (Durapipe).',
+      'A wide-range mechanical coupling can also span both ODs when both measurements fall inside one published range (see Couplings). Measure both ODs.',
+      'PVC-U and ABS cements are not interchangeable across a transition. To join ABS to PVC-U, use a purpose-made transition union (GF adaptor union, inch, ½"–2") — ABS cement on the ABS side, PVC-U cement on the PVC-U side — or a mechanical coupling. Do not solvent-weld ABS pipe into a PVC-U fitting, or the other way around.',
     ],
-    dnVsOdSources: ['iso161', 'iso6708', 'iso1452def', 'durapipePvc', 'gfValveDn'],
-    interconnect: ['Imperial (inch) pipe is named by nominal BORE and metric pipe by OD; the ODs are slightly different, so they do not mix without inch / metric adaptors or flanges.',
-      'Only 2½" / 75 mm and 5" / 140 mm are dimensionally interchangeable (Durapipe ABS; GF PVC-U).',
-      'Do not interchange metric and imperial flanges and backing rings (Durapipe).'],
-    interconnectSources: ['durapipeAbs', 'durapipePvc', 'gfPvc2012'],
+    interconnectSources: ['durapipeAbs', 'durapipePvc', 'gfPvc2012', 'gfAbsPvcUnion'],
+    /* Durapipe published imperial × metric solvent-weld socket adaptors. Sizes not listed are not invented. */
+    adaptors: [
+      { id: 'durapipe-pvc-im', maker: 'Durapipe', name: 'PVC-U imperial/metric socket adaptor (plain)',
+        material: 'pvc', pn: 'PN15', cement: 'PVC-U cement — not ABS',
+        sizes: [
+          { nps: '1/2"', metric: 20, code: '33 345 102' }, { nps: '3/4"', metric: 25, code: '33 345 103' },
+          { nps: '1"', metric: 32, code: '33 345 104' }, { nps: '1 1/4"', metric: 40, code: '33 345 105' },
+          { nps: '1 1/2"', metric: 50, code: '33 345 106' }, { nps: '2"', metric: 63, code: '33 345 107' },
+          { nps: '2 1/2"', metric: 75, code: '33 345 108' }, { nps: '3"', metric: 90, code: '33 345 109' },
+          { nps: '4"', metric: 110, code: '33 345 110' },
+        ],
+        notes: 'Solvent-weld both ends with PVC-U cement. The 2½" × 75 mm size is listed even though those ODs already interchange. No 5", 6", 8" or larger adaptor is listed in the Durapipe PVC-U specification guide.',
+        sources: ['durapipePvc'] },
+      { id: 'durapipe-abs-im', maker: 'Durapipe', name: 'SuperFLO ABS imperial/metric socket adaptor (plain)',
+        material: 'abs', pn: 'PN10', cement: 'ABS cement — not PVC',
+        sizes: [
+          { nps: '1/2"', metric: 20, code: '11 345 102' }, { nps: '3/4"', metric: 25, code: '11 345 103' },
+          { nps: '1"', metric: 32, code: '11 345 104' }, { nps: '1 1/4"', metric: 40, code: '11 345 105' },
+          { nps: '1 1/2"', metric: 50, code: '11 345 106' }, { nps: '2"', metric: 63, code: '11 345 107' },
+          { nps: '3"', metric: 90, code: '11 345 109' }, { nps: '4"', metric: 110, code: '11 345 110' },
+          { nps: '6"', metric: 160, code: '11 345 112' },
+        ],
+        notes: 'Solvent-weld both ends with ABS cement and Eco-cleaner. No 2½" × 75 mm or 5" × 140 mm adaptor is listed — those sizes already interchange. There is a 6" × 160 mm adaptor (the ODs differ by 8.3 mm).',
+        sources: ['durapipeAbs'] },
+      { id: 'gf-abs-pvc-union', maker: 'Georg Fischer', name: 'Adaptor union ABS/PVC-U, inch BS',
+        material: 'transition', pn: 'PN15', cement: 'ABS cement on the ABS socket, PVC-U cement on the PVC-U socket',
+        sizes: [
+          { nps: '1/2"', metric: null, code: '729 521 106' }, { nps: '3/4"', metric: null, code: '729 521 107' },
+          { nps: '1"', metric: null, code: '729 521 108' }, { nps: '1 1/4"', metric: null, code: '729 521 109' },
+          { nps: '1 1/2"', metric: null, code: '729 521 110' }, { nps: '2"', metric: null, code: '729 521 111' },
+        ],
+        notes: 'A union: one solvent socket is ABS (inch), the other is PVC-U (inch), with an EPDM O-ring. This joins ABS to PVC-U of the same inch size. It is not an imperial-to-metric adaptor. Sizes above 2" are not listed on the data sheet.',
+        sources: ['gfAbsPvcUnion'] },
+    ],
+    jointMethods: [
+      { id: 'solvent', label: 'Solvent-weld socket' },
+      { id: 'pushfit', label: 'Ring-seal / push-fit' },
+      { id: 'butt', label: 'Butt fusion' },
+      { id: 'electro', label: 'Electrofusion' },
+      { id: 'socketfus', label: 'Socket fusion' },
+      { id: 'mech', label: 'Compression / mechanical coupling' },
+      { id: 'flange', label: 'Flanged (stub + backing ring)' },
+      { id: 'thread', label: 'Threaded' },
+    ],
+    jointMaterials: [
+      { id: 'pvc-u', name: 'PVC-U',
+        methods: {
+          solvent: ['yes', 'Standard joint for pressure and soil (solvent-weld sizes). Use PVC-U cement only.'],
+          pushfit: ['yes', 'Ring-seal (push-fit) sockets are standard on PVC-U soil (82 / 110 / 160 mm, Wavin) and typical on EN 1401 sewer.'],
+          butt: ['no', 'Not a solvent or fusion-weld material in the usual UK pressure systems — use solvent weld, mechanical or flanged joints.'],
+          electro: ['no', 'Not used on PVC-U.'],
+          socketfus: ['no', 'Not used on PVC-U.'],
+          mech: ['yes', 'Wide-range couplings and flange adaptors (see Couplings) where the OD is in range. Support liners may be required on thinner walls — check the maker.'],
+          flange: ['yes', 'Stub flange (or serrated stub) with a backing ring and gasket. Do not mix metric and imperial flanges or backing rings (Durapipe).'],
+          thread: ['caution', 'Only heavy wall: BS 3506 Class 7 (BSP, 12 bar after threading, Durapipe) or ASTM Schedule 80. Metric PVC-U is not produced with an OD suitable for threading. Do not thread Class C/D/E or Sch 40 — the wall is too thin.'],
+        }, sources: ['durapipePvc', 'wavinWaste', 'harvelSch'] },
+      { id: 'pvc-c', name: 'PVC-C (chlorinated PVC)',
+        methods: {
+          solvent: ['yes', 'Use a PVC-C solvent cement (e.g. Tangit PVC-C), not PVC-U or ABS cement. Tangit PVC-C is gap-filling up to +0.6 mm (EN 14814).'],
+          pushfit: ['no', 'Not listed in this app’s sources as a push-fit pressure system.'],
+          butt: ['no', 'Not listed in this app’s sources.'],
+          electro: ['no', 'Not listed in this app’s sources.'],
+          socketfus: ['no', 'Not listed in this app’s sources.'],
+          mech: ['yes', 'Mechanical couplings can be used where the maker lists PVC and the OD is in range — check the product.'],
+          flange: ['yes', 'Flanged joints are used on industrial PVC-C systems; use the maker’s stub and backing ring.'],
+          thread: ['caution', 'Only where the maker states the wall is suitable for threading (typically Schedule 80 / heavy wall). Check the product.'],
+        }, sources: ['tangitPvcC', 'durapipePvc'] },
+      { id: 'abs', name: 'ABS (pressure)',
+        methods: {
+          solvent: ['yes', 'Standard joint. Use ABS cement and cleaner only — not PVC-U cement. Durapipe SuperFLO: one-step cement (no abrasion unless joining onto old ABS).'],
+          pushfit: ['no', 'Not the usual joint for pressure ABS.'],
+          butt: ['no', 'Not used on ABS pressure systems in this app’s sources.'],
+          electro: ['no', 'Not used on ABS.'],
+          socketfus: ['no', 'Not used on ABS.'],
+          mech: ['yes', 'Wide-range couplings and flange adaptors where the OD is in range (see Couplings).'],
+          flange: ['yes', 'Stub flange + backing ring. Do not mix metric and imperial flanges or backing rings (Durapipe).'],
+          thread: ['caution', 'Class T only, and only up to 2" (Durapipe); 12 bar after threading. Metric ABS is not suitable for threading.'],
+        }, sources: ['durapipeAbs'] },
+      { id: 'pe', name: 'PE (PE80 / PE100)',
+        methods: {
+          solvent: ['no', 'PE cannot be solvent welded — it does not dissolve in the cements used for PVC and ABS.'],
+          pushfit: ['no', 'Not a ring-seal soil/waste system.'],
+          butt: ['yes', 'Standard joint for larger PE (butt fusion to EN 12201 practice). Use the pipe maker’s procedure.'],
+          electro: ['yes', 'Standard joint, especially for services and fittings (electrofusion couplers).'],
+          socketfus: ['caution', 'Used on some smaller PE systems; follow the fitting maker. Not as common in UK water as electrofusion / butt fusion.'],
+          mech: ['yes', 'PE-specific couplings (AVK 621 / 623, VJ AquaFast) and some wide-range couplings with a support liner or bush — see Couplings.'],
+          flange: ['yes', 'PE stub flange (or stub + backing ring) made for the pipe SDR. Do not mix with PVC imperial/metric rings by habit — use the PE maker’s set.'],
+          thread: ['no', 'PE pipe is not threaded.'],
+        }, sources: ['en12201', 'durapipeAbs'] },
+      { id: 'pp', name: 'PP (polypropylene)',
+        methods: {
+          solvent: ['no', 'PP cannot be solvent welded with PVC or ABS cements.'],
+          pushfit: ['yes', 'Wavin PP push-fit waste is a standard UK waste system, but its ODs differ from ABS solvent-weld waste (34.4–34.8, 40.8–41.2, 53.9–54.3 mm) — they do not push together.'],
+          butt: ['yes', 'Used on industrial PP pressure pipe.'],
+          electro: ['yes', 'Used on industrial PP pressure pipe.'],
+          socketfus: ['yes', 'Common on smaller industrial PP.'],
+          mech: ['yes', 'Mechanical couplings where the maker lists PP and the OD is in range.'],
+          flange: ['yes', 'Stub + backing ring on industrial PP systems.'],
+          thread: ['no', 'Not a standard joint for PP pipe.'],
+        }, sources: ['wavinWaste'] },
+      { id: 'waste', name: 'Soil / waste push-fit and solvent systems',
+        methods: {
+          solvent: ['yes', 'PVC-U soil: solvent weld 110 / 160 mm with PVC-U cement (Wavin). ABS waste 32 / 40 / 50 mm: ABS cement (FloPlast SC125 / SC250). Do not mix the two cements.'],
+          pushfit: ['yes', 'PVC-U soil ring-seal 82 / 110 / 160 mm (Wavin). PP push-fit waste is a different OD — do not mix with ABS solvent-weld waste.'],
+          butt: ['no', 'Not used on soil / waste systems.'],
+          electro: ['no', 'Not used on soil / waste systems.'],
+          socketfus: ['no', 'Not used on soil / waste systems.'],
+          mech: ['caution', 'Repair couplings are used on site; measure the real OD (ABS waste is 36 / 43 / 56 mm, not 32 / 40 / 50).'],
+          flange: ['no', 'Not a usual soil / waste joint.'],
+          thread: ['no', 'Not used on soil / waste pipe.'],
+        }, sources: ['wavinWaste', 'floplastAbs'] },
+    ],
+    cements: [
+      { id: 'durapipe-pvc', brand: 'Durapipe', name: 'PVC-U one-step solvent cement (FIP & Astore PVCu Clear)',
+        for: ['pvc-u'], gapFilling: 'Yes — Durapipe describes good gap filling. The cement is made with PVC-U resin.',
+        cleaner: 'Durapipe cleaner / Eco-cleaner (and HCR-36 Cleaner with HCR-36 cement).',
+        wras: 'WRAS approved: “Durapipe FIP & Astore PVCu Clear Solvent Cement”, approval 2212568. WRAS condition: cure/dry 24 hours at 5 °C; water up to 23 °C. Check the current listing.',
+        cure: 'Durapipe: wherever possible, at least 24 hours for joints up to 8"/225 mm, and 48 hours for 10"–12" / 250–315 mm (ambient 10–40 °C). A shorter “hour per bar” guide is given for early pressurisation; never less than 1 hour. Do not joint below 5 °C with HCR-36; follow the one-step instructions for the standard cement.',
+        sources: ['durapipePvc', 'wrasCements'] },
+      { id: 'durapipe-hcr', brand: 'Durapipe', name: 'HCR-36 chemically resistant PVC-U cement + HCR-36 Cleaner',
+        for: ['pvc-u'], gapFilling: 'Yes — a second (or third) coat can be applied after 30 seconds if a gap must be filled. Maximum gap 0.3 mm.',
+        cleaner: 'HCR-36 Chemically Resistant Cleaner (code 03 467 395).',
+        wras: 'Not claimed in this app — check the WRAS listing for the exact product.',
+        cure: 'Durapipe advises 48 hours drying time when using HCR-36. Not suitable for jointing below 5 °C. Recommended for strong chemicals (e.g. sulphuric acid > 70 %, nitric acid > 20 %, hydrofluoric acid, sodium hypochlorite > 7.5 % active chlorine, caustic soda > 35 %).',
+        sources: ['durapipePvc'] },
+      { id: 'tangit-pvc-u', brand: 'Tangit (Henkel / GF)', name: 'Tangit PVC-U (and Tangit PVC-U Plus)',
+        for: ['pvc-u'], gapFilling: 'Yes — gap filling and thixotropic (Tangit PVC-U TDS). Open time about 4 minutes at 20 °C.',
+        cleaner: 'Tangit Cleaner PVC-U/C/ABS (as specified on the TDS).',
+        wras: 'Tangit PVC-U Plus, approval 2202517: cure 24 hours at 7 °C, water up to 23 °C. A separate product, Tangit PVC-U Special Adhesive (approval 2209535, held by George Fischer Sales Ltd), has a WRAS condition of 20 days at 23 °C. Use the product named on the approval and check the current listing.',
+        cure: 'Follow the TDS and the WRAS conditions above. Approved for PVC-U pressure systems to EN 1452 and EN ISO 15493, and non-pressure EN 1329. Complies with EN 14814 and EN 14680.',
+        sources: ['tangitPvcU', 'wrasCements'] },
+      { id: 'tangit-pvc-c', brand: 'Tangit (Henkel)', name: 'Tangit PVC-C Special Adhesive',
+        for: ['pvc-c'], gapFilling: 'Yes — gap filling and thixotropic, up to +0.6 mm in accordance with EN 14814.',
+        cleaner: 'Tangit Cleaner PVC-U/C/ABS.',
+        wras: 'Not listed in the WRAS section 5560 extract used for this app — check the current WRAS listing.',
+        cure: 'For PVC-C pressure systems (EN ISO 15493 / EN 1566). Open time about 1 minute. Follow the TDS. Do not use this cement on PE, PP, PVC-U or ABS as a substitute for the correct cement.',
+        sources: ['tangitPvcC'] },
+      { id: 'durapipe-abs', brand: 'Durapipe', name: 'SuperFLO ABS one-step solvent cement + Eco-cleaner',
+        for: ['abs'], gapFilling: 'Use as a one-step cement; do not try to increase the clearance between pipe and fitting (Durapipe).',
+        cleaner: 'Durapipe Eco-cleaner. Abrasion is not required unless joining onto old ABS pipe.',
+        wras: 'Durapipe: SuperFLO ABS one-step solvent cement is UK WRAS approved (check the current listing for the exact product).',
+        cure: 'Wherever possible, at least 24 hours for joints up to 8"/225 mm, and 48 hours for 250–315 mm (ambient 10–40 °C). A shorter “hour per bar” guide is given for early pressurisation; never less than 1 hour. Do not make solvent joints below 0 °C.',
+        sources: ['durapipeAbs'] },
+      { id: 'tangit-abs', brand: 'Tangit (Henkel / GF)', name: 'Tangit ABS',
+        for: ['abs'], gapFilling: 'Follow the Tangit ABS TDS (not reproduced in full here).',
+        cleaner: 'Tangit Cleaner PVC-U/C/ABS, as specified by the maker.',
+        wras: 'WRAS approval 2212513 (held by George Fischer Sales Ltd). WRAS condition: cure 20 days at 23 °C; water up to 23 °C. Check the current listing.',
+        cure: 'The WRAS approval is only for the stated cure (20 days at 23 °C). Follow the TDS for handling time; do not assume a shorter WRAS cure.',
+        sources: ['wrasCements'] },
+      { id: 'griffon-uni100', brand: 'Griffon (Bison)', name: 'Griffon UNI-100 XT',
+        for: ['pvc-u'], gapFilling: 'Follow the maker’s instructions (sheet 6300427).',
+        cleaner: 'Use the cleaner named by Griffon for this cement.',
+        wras: 'WRAS approval 2311523. WRAS condition: cure 24 hours at 7 °C; water up to 35 °C. Intended to join PVC pipe and fittings. Check the current listing.',
+        cure: 'WRAS: 24 hours at 7 °C. Follow the maker’s instructions for handling time.',
+        sources: ['wrasCements'] },
+      { id: 'floplast-abs', brand: 'FloPlast', name: 'FloPlast SC125 / SC250 ABS solvent cement',
+        for: ['abs', 'waste'], gapFilling: 'For ABS solvent-weld waste (32 / 40 / 50 mm). Follow the tech sheet.',
+        cleaner: 'As specified on the FloPlast sheet.',
+        wras: 'Not for drinking water (waste system).',
+        cure: 'FloPlast: 5 minutes to handle, 12 hours before testing.',
+        sources: ['floplastAbs'] },
+    ],
+    jointRules: [
+      'PVC-U and ABS cements are not interchangeable. Do not share brushes between them (Durapipe).',
+      'PE and PP cannot be solvent welded.',
+      'ABS-to-PVC-U: do not solvent-weld one material into a fitting of the other. Use a purpose-made transition union (Georg Fischer adaptor union ABS/PVC-U, inch, ½"–2" PN15 — ABS cement on the ABS socket, PVC-U cement on the PVC-U socket) or a mechanical coupling.',
+      'Threaded joints are only for heavy wall (BS 3506 Class 7, ABS Class T up to 2", or ASTM Schedule 80). Metric PVC-U and metric ABS are not suitable for threading (Durapipe). Pressure is reduced after threading (Class 7 / Class T: 12 bar).',
+    ],
     groups: [
+
       { id: 'pvc-metric', make: 'pvc', system: 'metric', title: 'PVC-U pressure — metric (EN 1452)', seriesIds: ['EN1452_PN10', 'EN1452_PN16'],
         uses: 'Potable water mains and services, industrial and process water, chemical (with HCR-36 cement for strong chemicals).',
         joining: 'Solvent weld (Durapipe PVC-U one-step cement) or ring-seal / mechanical couplings.', cement: 'PVC-U cement — not ABS',
