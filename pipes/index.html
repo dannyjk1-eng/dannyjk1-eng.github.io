@@ -130,9 +130,6 @@
   .pr-app .pr-sizepicks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
   .pr-app .pr-sizepicks .field { margin-bottom: 0; }
   .pr-app .pr-sizepicks .field label { margin-bottom: 4px; }
-  .pr-app .pr-compat { background: #f4f8fc; border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 8px; padding: 10px 12px; margin: 8px 0 10px; font-size: .86rem; }
-  .pr-app .pr-compat h3 { margin: 0 0 6px; font-size: .95rem; }
-  .pr-app .pr-compat ul { margin: 6px 0 0; padding-left: 1.2em; }
   .pr-app table.data.pr-joint { font-size: .78rem; }
   .pr-app table.data.pr-joint th { white-space: normal; min-width: 4.4em; font-size: .72rem; }
   .pr-app .pr-yes { color: var(--good); font-weight: 650; }
@@ -216,7 +213,7 @@
         </div>
       </div>
     </div>
-    <div class="pr-compat" id="pr-compatBox" hidden></div>
+    <div class="note" id="pr-mixNote" hidden></div>
     <div class="checks" style="margin-bottom:8px">
       <label><input type="checkbox" id="pr-showPlastic" checked> Include plastics sized by OD</label>
     </div>
@@ -328,7 +325,7 @@
         </div>
       </div>
     </div>
-    <div class="pr-compat" id="pr-plCompat" hidden></div>
+    <div class="note" id="pr-plMixNote"></div>
     <div class="pr-cement" id="pr-plCement"></div>
     <div class="note pr-dnod" id="pr-plDnNote"></div>
     <div class="note">Walls are the standards’ <b>minimum</b> walls. Where shown, <b>nom</b> is a manufacturer product wall and <b>max</b> is the standard maximum. ID = OD − 2 × min wall. Imperial pipe is named by bore, metric by OD. ⚠ = a figure that is not a published min, max or product wall. Tap a row to see it in By size.</div>
@@ -338,10 +335,6 @@
     <div id="pr-plJointBody"></div>
   </section>
   <div id="pr-plGroups"></div>
-  <section class="card" id="pr-plCompare">
-    <h2>Metric and imperial — will they fit?</h2>
-    <div id="pr-plCompareBody"></div>
-  </section>
 </main>
 
 <footer>
@@ -350,7 +343,7 @@
     always check the manufacturer’s data, the WRAS / Regulation 31 listing for the exact product, and the asset record,
     and measure the OD before ordering a coupling or adaptor.</p>
   <details><summary>Sources</summary><ul class="pr-list" id="pr-sources"></ul></details>
-  <p><a href="../">← Flange ID</a> (sister app) · Pipe Reference v6</p>
+  <p><a href="../">← Flange ID</a> (sister app) · Pipe Reference v7</p>
 </footer>
 
 <script src="pipe-data.js"></script>
@@ -458,61 +451,16 @@ const PipeUI = (() => {
     i = Math.max(0, Math.min(list.length - 1, i + dir));
     if (list[i]) setPlasticSize(list[i].value);
   }
-  function compatHTML(sizeKey) {
-    const c = L.compatForSize(sizeKey, { ukOnly: st.ukOnly, family: 'plastic', sub: st.sub });
-    if (!c) return '';
-    const item = c.item;
-    let h = `<h3>Metric / imperial fit — ${esc(item.label)}</h3>`;
-    if (c.counterpart) {
-      const d = c.pairDiff;
-      const dTxt = (d > 0 ? '+' : '') + d + ' mm';
-      if (c.interchangeable) {
-        h += `<p><b>These ODs are interchangeable.</b> ${esc(item.label)} and ${esc(c.counterpart.label)} (Δ ${esc(dTxt)}) can take the same fittings (Durapipe; GF). No adaptor is required.</p>`;
-      } else {
-        h += `<p><b>A metric fitting will not fit this imperial pipe, or the other way around.</b> Nearest counterpart: ${esc(c.counterpart.label)} (OD difference ${esc(dTxt)}).</p>`;
-      }
-    } else {
-      h += '<p>No inch / metric counterpart is listed for this size in the BS 3505 / EN 1452 comparison.</p>';
-    }
-    h += '<ul>';
-    if (c.adaptors.length) {
-      c.adaptors.forEach((x) => {
-        const a = x.adaptor;
-        x.sizes.forEach((s) => {
-          const pair = s.metric != null ? `${s.nps} × ${s.metric} mm` : s.nps;
-          h += `<li><b>${esc(a.maker)} ${esc(a.name)}</b> — ${esc(pair)}${s.code ? ' (code ' + esc(s.code) + ')' : ''}, ${esc(a.pn)}. ${esc(a.cement)}. ${esc(a.notes)}</li>`;
-        });
-      });
-    } else if (!c.interchangeable && item.kind !== 'dn') {
-      h += '<li>No Durapipe imperial/metric socket adaptor is listed for this size in the specification guides used here. Join with flanges (use a matching metric or imperial backing ring — do not mix them) or a wide-range mechanical coupling if one range covers both ODs.</li>';
-    }
-    if (c.transitions.length && (item.kind === 'nps' || (c.counterpart && c.counterpart.kind === 'nps'))) {
-      c.transitions.forEach((x) => {
-        const a = x.adaptor;
-        h += `<li><b>ABS to PVC-U:</b> ${esc(a.maker)} ${esc(a.name)} — ${x.sizes.map((s) => s.nps).join(', ')}, ${esc(a.pn)}. ${esc(a.notes)} Use ${esc(a.cement)}.</li>`;
-      });
-    } else if (item.kind === 'nps' || item.kind === 'd') {
-      h += '<li>PVC-U and ABS cements are not interchangeable. To join ABS to PVC-U use a purpose-made transition union (GF lists ½"–2" inch) or a mechanical coupling — do not solvent-weld one material into a fitting of the other.</li>';
-    }
-    if (c.couplings.length) {
-      const names = [...new Set(c.couplings.map((x) => `${x.coupling.maker} ${x.coupling.name} (${x.label}, ${x.min}–${x.max} mm)`))];
-      h += `<li><b>Wide-range couplings</b> whose published range covers both ODs (${esc(item.od + ' mm')} and ${esc((c.counterpart && c.counterpart.od) + ' mm')}): ${esc(names.join('; '))}. Measure both ODs. See the Couplings tab.</li>`;
-    } else if (c.counterpart && !c.interchangeable) {
-      h += '<li>No single wide-range coupling in this app has a published range that covers both ODs. Check the Couplings tab, or use an adaptor or a pair of flange adaptors.</li>';
-    }
-    h += '</ul>';
-    h += `<div class="note">Source: ${src(c.sources)}</div>`;
-    return h;
-  }
   function fillDnSelect() {
     const plastic = st.family === 'plastic';
     $('dnField').hidden = plastic;
     $('plSizeWrap').hidden = !plastic;
+    $('mixNote').hidden = !plastic;
     if (plastic) {
       fillPlasticPickers();
+      $('mixNote').textContent = D.plastics.mixNote;
       return;
     }
-    $('compatBox').hidden = true;
     $('dn').setAttribute('aria-label', 'Nominal size DN');
     const list = activeDns();
     if (st.dn && !list.includes(st.dn) && L.dnList().includes(st.dn)) {
@@ -571,9 +519,8 @@ const PipeUI = (() => {
       store.set('sizeKey', st.sizeKey);
       $('sizeHead').textContent = 'Pick a metric or imperial size';
       $('dnOdNote').innerHTML = dnOdNoteHtml();
-      const htmlC = compatHTML(st.sizeKey);
-      $('compatBox').hidden = !htmlC;
-      $('compatBox').innerHTML = htmlC;
+      $('mixNote').hidden = false;
+      $('mixNote').textContent = D.plastics.mixNote;
       const full = L.rowsForPlasticSize(st.sizeKey, { family: 'plastic', sub: st.sub });
       const hidden = L.hiddenNonUk(full, st.ukOnly);
       const rows = st.ukOnly ? full.filter((r) => r.ukCommon) : full;
@@ -845,9 +792,7 @@ const PipeUI = (() => {
     fillPlasticPickers();
     $('plCement').textContent = '⚠ ' + D.plastics.cementWarning;
     $('plDnNote').textContent = D.plastics.dnVsOd || '';
-    const htmlC = st.sizeKey ? compatHTML(st.sizeKey) : '';
-    $('plCompat').hidden = !htmlC;
-    $('plCompat').innerHTML = htmlC;
+    $('plMixNote').textContent = D.plastics.mixNote;
     $('plJointBody').innerHTML = jointingHTML();
     let groups = L.plasticGroups({ system: st.plSys, make: st.plMat, ukOnly: st.ukOnly });
     if (st.sizeKey) {
@@ -863,20 +808,6 @@ const PipeUI = (() => {
       + (!groups.length ? '<section class="card"><div class="empty">No plastic tables for this choice' + (st.sizeKey ? ' at the selected size' : '') + ' with the UK filter on.</div></section>' : '')
       + (hiddenUk ? `<div class="note" style="padding:0 12px">${hiddenUk} non-UK table(s) hidden by the UK filter (US Schedule 40 PVC).</div>` : '');
     if (st.tab === 'plastics') $('ukCount').textContent = hiddenUk ? `${hiddenUk} non-UK table hidden` : '';
-    const cmp = L.inchVsMetric();
-    const adList = (D.plastics.adaptors || []).filter((a) => a.material !== 'transition')
-      .map((a) => `<div class="note"><b>${esc(a.maker)} ${esc(a.name)}</b> (${esc(a.pn)}): `
-        + a.sizes.map((s) => s.metric != null ? `${s.nps} × ${s.metric} mm` : s.nps).join(', ')
-        + '. ' + esc(a.notes) + ' Source: ' + src(a.sources) + '</div>').join('');
-    const tr = (D.plastics.adaptors || []).find((a) => a.material === 'transition');
-    $('plCompareBody').innerHTML = '<div class="note">' + D.plastics.interconnect.map(esc).join('<br>') + '</div>'
-      + '<div class="scroll"><table class="data"><thead><tr><th class="l">Inch size</th><th>Inch OD</th><th>Nearest metric OD</th><th>Δ mm</th><th class="l">Mix?</th></tr></thead><tbody>'
-      + cmp.map((c) => `<tr><td class="l">${esc(c.nps)}</td><td>${fmt(c.od)}</td><td>${fmt(c.metric)}</td><td>${c.diff > 0 ? '+' : ''}${c.diff}</td>`
-        + `<td class="l">${c.interchangeable ? '✓ fittings fit (same OD)' : 'adaptor or coupling needed'}</td></tr>`).join('') + '</tbody></table></div>'
-      + `<div class="note">“Nearest metric” is calculated by this app from BS 3505 and EN 1452 ODs — it is not a maker’s equivalence table. Only 2½" / 75 mm and 5" / 140 mm are published as interchangeable.</div>`
-      + '<h3>Imperial / metric adaptor fittings</h3>' + adList
-      + (tr ? `<div class="note"><b>${esc(tr.maker)} ${esc(tr.name)}</b> (${esc(tr.pn)}): ${tr.sizes.map((s) => s.nps).join(', ')}. ${esc(tr.notes)} Source: ${src(tr.sources)}</div>` : '')
-      + `<div class="note">Source: ${src(D.plastics.interconnectSources)}</div>`;
   }
 
   /* ---------- material family filter ---------- */
